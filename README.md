@@ -4,29 +4,44 @@ OCE is a consent-aware campaign operations engine built around Google Sheets and
 
 ## Current release
 
-**V1.1 — Operations foundation**
+**V1.2 — Delivery boundary and controlled rollout foundation**
 
 Included:
 
-- contact normalization;
-- email validation;
+- contact normalization and email validation;
 - Uganda phone normalization;
 - duplicate handling;
-- consent filtering;
-- suppression list support;
+- consent filtering and suppression support;
 - provenance/source fields;
-- segmentation;
-- campaign queueing;
+- segmentation and campaign queueing;
 - configurable batch size (default 250);
 - holiday/weekend controls;
 - Kampala timezone support;
 - pause/resume safety switch;
 - hourly scheduler framework;
-- dashboard and send log.
+- dashboard and send log;
+- provider-neutral delivery adapter;
+- DRY_RUN / TEST / PRODUCTION delivery modes;
+- idempotency key based on queue ID;
+- provider message ID and retry-attempt fields;
+- Resend integration boundary without storing provider credentials in GitHub or Sheets.
 
-### Important
+### Important safety state
 
-V1.1 does **not** send email yet. The delivery adapter is intentionally disabled until a production provider is connected and compliance controls are tested.
+Production sending is **not enabled**. The default delivery mode is **DRY_RUN** and the global `SEND_ENABLED` switch is `FALSE`. The production gate must remain closed until sender authentication, consent, unsubscribe, suppression, bounce/complaint handling, and a controlled test are verified.
+
+## V1.2 deployment
+
+1. Open the OCE Google Sheet.
+2. Extensions → Apps Script.
+3. Keep the existing `Code.gs` and add `apps-script/DeliveryAdapter.gs`.
+4. Add `apps-script/V12_Migration.gs` and run `upgradeOCE12()` once.
+5. Run **Initialize / Repair Workbook**.
+6. Confirm `DELIVERY_MODE` is `DRY_RUN` and `SEND_ENABLED` is `FALSE`.
+7. Do not place provider API keys in GitHub, campaign sheets, or contact exports.
+8. Configure the external delivery endpoint only after its authentication and unsubscribe/suppression handling are ready.
+
+The adapter expects the external delivery service to return a `results[]` array containing the queue ID, recipient, result, optional provider message ID, and message. This keeps provider credentials outside the spreadsheet control plane.
 
 ## Repository structure
 
@@ -34,6 +49,8 @@ V1.1 does **not** send email yet. The delivery adapter is intentionally disabled
 oce/
 ├── apps-script/
 │   ├── Code.gs
+│   ├── DeliveryAdapter.gs
+│   ├── V12_Migration.gs
 │   └── appsscript.json
 ├── config/
 │   └── settings.example.json
@@ -41,9 +58,12 @@ oce/
 │   ├── architecture.md
 │   ├── database.md
 │   ├── deployment.md
-│   └── security.md
+│   ├── provider-resend.md
+│   ├── security.md
+│   └── v1.2-rollout.md
 ├── tests/
 │   └── README.md
+├── .github/workflows/validate.yml
 ├── .gitignore
 └── README.md
 ```
@@ -54,11 +74,10 @@ Only authorized/consented contact data should be imported. Do not bypass access 
 
 ## Roadmap
 
-1. Repository and source-control foundation — current.
-2. Provider-neutral delivery interface.
-3. Resend production adapter.
-4. Unsubscribe/bounce webhook processing.
-5. Campaign analytics and delivery metrics.
-6. Stronger holiday calendar management.
-7. Automated tests and CI validation.
-8. Optional multi-provider failover architecture.
+1. Provider-neutral delivery boundary — complete.
+2. Controlled Resend delivery endpoint — next.
+3. Unsubscribe/bounce/complaint lifecycle processing.
+4. Campaign analytics and delivery metrics.
+5. Stronger holiday calendar management.
+6. Automated tests and CI validation.
+7. Optional multi-provider failover architecture.
