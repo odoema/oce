@@ -1,0 +1,11 @@
+{
+  "timezone": "Africa/Kampala",
+  "batch_size": 250,
+  "send_enabled": false,
+  "send_hour_start": 9,
+  "send_hour_end": 17,
+  "block_weekends": true,
+  "block_holidays": true,
+  "delivery_provider": "resend",
+  "notes": "Example configuration only. Never commit API keys, tokens, contact exports, or service-account credentials."
+}
