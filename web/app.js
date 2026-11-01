@@ -1,11 +1,11 @@
 /* OCE Source Collector UI
  * LEGO block: URL -> Scan -> Results
  * Backend configuration belongs to infrastructure, never to the operator.
+ * Browser transport uses JSONP-compatible GET to avoid Apps Script CORS/preflight issues.
  */
 const CONFIG = {
-  // Set this to the deployed collector service URL before publishing a live scanner.
-  // Never put a collector secret/token in this file.
-  COLLECTOR_ENDPOINT: ''
+  // Public Apps Script web-app endpoint. No collector secret belongs here.
+  COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/REPLACE_WITH_DEPLOYED_OCE_EXEC_ID/exec'
 };
 
 let latest = null;
@@ -17,8 +17,8 @@ function setStatus(text, show = true) {
 }
 
 function esc(value) {
-  return String(value ?? '').replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  return String(value ?? '').replace(/[&<>\"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;'
   }[c]));
 }
 
@@ -39,28 +39,51 @@ function render(data) {
   ).join('') || 'No labelled links detected.';
 }
 
+function jsonpScan(url) {
+  return new Promise((resolve, reject) => {
+    const callback = `oceCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement('script');
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('The collector did not respond. Check that the OCE Apps Script web app is deployed for public access.'));
+    }, 30000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[callback];
+      script.remove();
+    }
+
+    window[callback] = result => {
+      cleanup();
+      if (!result || !result.ok) reject(new Error(result?.error || 'Scan failed'));
+      else resolve(result.result);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Unable to reach the OCE collector service.'));
+    };
+
+    script.src = `${CONFIG.COLLECTOR_ENDPOINT}?url=${encodeURIComponent(url)}&callback=${encodeURIComponent(callback)}`;
+    document.body.appendChild(script);
+  });
+}
+
 async function scan() {
   const url = $('url').value.trim();
   if (!url) return setStatus('Enter a website URL.');
 
-  if (!CONFIG.COLLECTOR_ENDPOINT) {
-    return setStatus('The OCE collector service is not connected yet. The interface is ready; the backend endpoint still needs to be deployed and configured.');
+  if (!CONFIG.COLLECTOR_ENDPOINT || CONFIG.COLLECTOR_ENDPOINT.includes('REPLACE_WITH_DEPLOYED')) {
+    return setStatus('OCE is waiting for its deployed collector endpoint.');
   }
 
   setStatus('Scanning public page…');
   $('results').classList.add('hidden');
 
   try {
-    const response = await fetch(CONFIG.COLLECTOR_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'scan', url })
-    });
-
-    const result = await response.json();
-    if (!result.ok) throw new Error(result.error || 'Scan failed');
-
-    render(result.result);
+    const result = await jsonpScan(url);
+    render(result);
     setStatus('Scan complete. Review before importing.');
   } catch (error) {
     setStatus(error.message || 'Scan failed.');
