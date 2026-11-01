@@ -1,0 +1,21 @@
+# OCE local / secret data
+.env
+*.env
+credentials.json
+service-account*.json
+client_secret*.json
+contacts.csv
+contacts.xlsx
+contacts*.csv
+*.sqlite
+*.db
+.DS_Store
+
+# Google Apps Script local metadata
+.clasp.json
+.claspignore
+node_modules/
+
+# IDE
+.vscode/
+.idea/
