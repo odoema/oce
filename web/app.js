@@ -1,10 +1,11 @@
 /* OCE Source Collector UI
  * LEGO block: URL -> Scan -> Results
  * Backend configuration belongs to infrastructure, never to the operator.
- * Browser transport uses JSONP-compatible GET to avoid Apps Script CORS/preflight issues.
+ * Uses a simple GET request to the Apps Script collector to avoid JSON POST preflight.
  */
 const CONFIG = {
-  // Public Apps Script web-app endpoint. No collector secret belongs here.
+  // Set to the deployed OCE Apps Script /exec URL before publishing the live scanner.
+  // Never put a collector secret/token in this file.
   COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/REPLACE_WITH_DEPLOYED_OCE_EXEC_ID/exec'
 };
 
@@ -39,37 +40,6 @@ function render(data) {
   ).join('') || 'No labelled links detected.';
 }
 
-function jsonpScan(url) {
-  return new Promise((resolve, reject) => {
-    const callback = `oceCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const script = document.createElement('script');
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('The collector did not respond. Check that the OCE Apps Script web app is deployed for public access.'));
-    }, 30000);
-
-    function cleanup() {
-      clearTimeout(timer);
-      delete window[callback];
-      script.remove();
-    }
-
-    window[callback] = result => {
-      cleanup();
-      if (!result || !result.ok) reject(new Error(result?.error || 'Scan failed'));
-      else resolve(result.result);
-    };
-
-    script.onerror = () => {
-      cleanup();
-      reject(new Error('Unable to reach the OCE collector service.'));
-    };
-
-    script.src = `${CONFIG.COLLECTOR_ENDPOINT}?url=${encodeURIComponent(url)}&callback=${encodeURIComponent(callback)}`;
-    document.body.appendChild(script);
-  });
-}
-
 async function scan() {
   const url = $('url').value.trim();
   if (!url) return setStatus('Enter a website URL.');
@@ -82,8 +52,14 @@ async function scan() {
   $('results').classList.add('hidden');
 
   try {
-    const result = await jsonpScan(url);
-    render(result);
+    const endpoint = `${CONFIG.COLLECTOR_ENDPOINT}?url=${encodeURIComponent(url)}`;
+    const response = await fetch(endpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
+    if (!response.ok) throw new Error(`Collector returned HTTP ${response.status}`);
+
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || 'Scan failed');
+
+    render(result.result);
     setStatus('Scan complete. Review before importing.');
   } catch (error) {
     setStatus(error.message || 'Scan failed.');
