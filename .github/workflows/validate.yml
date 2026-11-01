@@ -1,0 +1,22 @@
+name: Validate OCE
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        run: |
+          test -f apps-script/Code.gs
+          test -f apps-script/appsscript.json
+          test -f README.md
+          test -f docs/security.md
+      - name: Check for obvious secret filenames
+        run: |
+          ! find . -type f \( -name '*.env' -o -name 'credentials.json' -o -name 'service-account*.json' -o -name 'client_secret*.json' \) -not -path './.git/*' | grep -q .
