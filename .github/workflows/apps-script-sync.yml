@@ -86,8 +86,8 @@ jobs:
           node -e '
             const x = JSON.parse(process.argv[1]);
             if (!x.ok || x.service !== "OCE Collector Gateway") process.exit(1);
-            if (x.version !== "4.4.0") {
-              console.error(`Expected gateway 4.4.0, received ${x.version}`);
+            if (x.version !== "4.6.0") {
+              console.error(`Expected gateway 4.6.0, received ${x.version}`);
               process.exit(1);
             }
             console.log(`Gateway ${x.version}: ${x.status}`);
