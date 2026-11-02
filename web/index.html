@@ -13,7 +13,7 @@
     <div>
       <span class="eyebrow">ODOCH CAMPAIGN ENGINE</span>
       <h1>Marketing Intelligence Engine</h1>
-      <p>Tell OCE what you are looking for. Mission Control plans discovery, finds public sources, queues them, collects them, and reports live progress.</p>
+      <p>Tell OCE what you are looking for. Mission Control plans discovery, ranks public sources, collects the fastest high-value batch first, and lets you expand in controlled batches.</p>
     </div>
     <div class="badge">AUTOMATIC MISSION · SAFE MODE</div>
   </header>
@@ -23,7 +23,7 @@
       <div>
         <span class="eyebrow">LEGO BLOCK · MISSION CONTROL</span>
         <h2>Start a Discovery Mission</h2>
-        <p>You do not need to know what a seed URL is. Give OCE the objective and the engine generates its own public starting sources, builds a persistent queue, and keeps working in the background.</p>
+        <p>You do not need to know what a seed URL is. Give OCE the objective and the engine generates public starting sources, ranks discoveries by likely data value, and processes the best 300 first.</p>
       </div>
       <span class="safe-label">DISCOVERY + COLLECTION</span>
     </div>
@@ -42,7 +42,7 @@
 
     <details class="advanced-discovery">
       <summary>Advanced discovery controls</summary>
-      <p class="hint">Normal missions are fully automatic. Manual seed URLs remain visible here for diagnostics and future expert workflows; Mission Control does not require them.</p>
+      <p class="hint">Normal missions use FAST mode: the top 300 ranked sources are activated first. Additional sources are retained as deferred records and can be run later in batches. Manual seed URLs remain available for diagnostics and expert workflows.</p>
     </details>
 
     <div id="missionProgress" class="mission-progress hidden" aria-live="polite">
@@ -51,12 +51,12 @@
         <strong id="missionPercent">0%</strong>
       </div>
       <div class="progress-track"><div id="missionProgressBar" class="progress-bar"></div></div>
-      <div id="missionDetail" class="progress-detail">Understanding the objective and selecting public discovery sources.</div>
+      <div id="missionDetail" class="progress-detail">Selecting the highest-ranked public sources first.</div>
     </div>
 
     <div id="discoveryPlan" class="discovery-plan hidden">
       <strong>Mission Control</strong>
-      <span id="discoveryPlanText">OCE is selecting public sources.</span>
+      <span id="discoveryPlanText">OCE is ranking public sources.</span>
     </div>
 
     <p class="hint">OCE only uses publicly accessible sources. It never bypasses login, CAPTCHA, paywalls or access controls. Discovery does not establish marketing consent.</p>
@@ -67,7 +67,7 @@
     <div class="section-head">
       <div>
         <h2>Source Queue</h2>
-        <p>Persistent mission sources being collected and tracked by the OCE backend.</p>
+        <p>Persistent mission sources are ranked, collected in fast batches, and never deleted merely because they are deferred.</p>
       </div>
       <div class="queue-actions">
         <button id="scoutExport" class="secondary">Export Mission</button>
@@ -76,10 +76,21 @@
     </div>
 
     <div class="queue-stats">
-      <div><strong id="scoutQueueCount">0</strong><span>Total</span></div>
+      <div><strong id="scoutQueueCount">0</strong><span>Selected</span></div>
       <div><strong id="scoutQueuedCount">0</strong><span>Active</span></div>
       <div><strong id="scoutDoneCount">0</strong><span>Completed</span></div>
       <div><strong id="scoutFailedCount">0</strong><span>Failed/Blocked</span></div>
+    </div>
+
+    <div class="batch-controls" style="margin:16px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <strong>Run more sources:</strong>
+      <select id="missionBatchSize" aria-label="Additional source batch size">
+        <option value="300" selected>Next 300</option>
+        <option value="500">Next 500</option>
+        <option value="1000">Next 1,000</option>
+        <option value="2000">Next 2,000</option>
+      </select>
+      <button id="missionExpand" class="secondary" disabled>No More Waiting Sources</button>
     </div>
 
     <div class="table-wrap">
@@ -88,7 +99,7 @@
         <tbody id="scoutQueueRows"></tbody>
       </table>
     </div>
-    <div class="notice">Persistent queue is managed by the OCE Queue Worker. The browser displays live mission state; it does not own the collection queue.</div>
+    <div class="notice">Fast mode processes the highest-ranked 300 sources first. Lower-ranked discoveries remain persistent and can be activated later in batches.</div>
   </section>
 
   <section class="card">
