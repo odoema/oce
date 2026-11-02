@@ -31,7 +31,8 @@ function doGet(e) {
     if (action === 'run_worker') {
       var limit = Number(params.limit || 5);
       limit = Math.max(1, Math.min(10, limit));
-      return gatewayJson_({ok:true,worker:runOceMissionBatch(limit)});
+      var workerMissionId = String(params.mission_id || '').trim();
+      return gatewayJson_({ok:true,worker:runOceMissionBatchForMission_(limit,workerMissionId)});
     }
 
     if (action === 'automation_status') {
