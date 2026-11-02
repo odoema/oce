@@ -1,17 +1,18 @@
-/* OCE Mission Discovery Brain V2.0
+/* OCE Mission Discovery Brain V2.1
  * Generic objective -> public web discovery.
  * This is deliberately NOT school-specific. Any mission objective can use it:
  * schools, hospitals, NGOs, companies, universities, churches, associations,
  * manufacturers, suppliers, government institutions, professional firms, etc.
  *
- * The brain uses public Bing web-search RSS results only to discover candidate
- * public URLs. OCE then treats those URLs as ordinary public collection sources;
- * it does not bypass login, CAPTCHA, paywalls, robots/access controls, or other
- * restrictions. Search results are candidates, not verified entity records.
+ * The discovery layer uses public Bing web-search results only to discover
+ * candidate public URLs. RSS is preferred, with a normal Bing HTML result
+ * fallback so a transient/empty RSS response does not leave a mission at zero
+ * sources. OCE never bypasses login, CAPTCHA, paywalls, robots/access controls,
+ * or other restrictions. Search results are candidates, not verified records.
  */
 
 const OCE_DISCOVERY = {
-  VERSION:'2.0.0',
+  VERSION:'2.1.0',
   MAX_RESULTS:60,
   MAX_QUERIES:8,
   SEARCH_HOST:'https://www.bing.com/search?q=',
@@ -28,16 +29,18 @@ function seedSchoolSourcesForMission_(missionId, topic) {
 function discoverPublicSourcesForMission_(missionId, topic) {
   const id = String(missionId || '').trim();
   const objective = String(topic || '').trim();
-  if (!id || !objective) return {applicable:false,seeded:0,total:0,queries:0,search_errors:0};
+  if (!id || !objective) return {applicable:false,seeded:0,total:0,queries:0,search_errors:0,fallback_hits:0};
 
   const queries = buildMissionDiscoveryQueries_(objective);
   const candidates = [];
   let searchErrors = 0;
+  let fallbackHits = 0;
 
   queries.forEach(function(query) {
     try {
-      const found = bingDiscoverUrls_(query);
-      found.forEach(function(item) { candidates.push(item); });
+      const result = bingDiscoverUrls_(query);
+      (result.items || []).forEach(function(item) { candidates.push(item); });
+      if (result.fallback) fallbackHits += 1;
     } catch (err) {
       searchErrors += 1;
       Logger.log('Discovery search failure: '+query+' — '+err.message);
@@ -71,7 +74,8 @@ function discoverPublicSourcesForMission_(missionId, topic) {
     total:ranked.length,
     queries:queries.length,
     search_errors:searchErrors,
-    engine:'Bing public web search RSS',
+    fallback_hits:fallbackHits,
+    engine:'Bing public web search',
     version:OCE_DISCOVERY.VERSION
   };
 }
@@ -95,40 +99,89 @@ function buildMissionDiscoveryQueries_(topic) {
   add(clean + ' Uganda public institutions site:go.ug');
   add(clean + ' Uganda organizations site:org.ug');
 
-  if (/\buganda\b/i.test(lower) === false) {
-    add(clean + ' Uganda');
-  }
+  if (/\buganda\b/i.test(lower) === false) add(clean + ' Uganda');
   return queries.slice(0,OCE_DISCOVERY.MAX_QUERIES);
 }
 
 function bingDiscoverUrls_(query) {
-  const url = OCE_DISCOVERY.SEARCH_HOST + encodeURIComponent(query) + '&format=rss&setlang=en-US';
+  const rssResult = bingDiscoverRss_(query);
+  if (rssResult.length) return {items:rssResult,fallback:false};
+
+  const htmlResult = bingDiscoverHtml_(query);
+  if (htmlResult.length) return {items:htmlResult,fallback:true};
+
+  return {items:[],fallback:true};
+}
+
+function bingDiscoverRss_(query) {
+  const url = OCE_DISCOVERY.SEARCH_HOST + encodeURIComponent(query) + '&format=rss&mkt=en-US&setlang=en-US';
   const response = UrlFetchApp.fetch(url, {
     method:'get',
     muteHttpExceptions:true,
     followRedirects:true,
-    headers:{'User-Agent':'OCE-Public-Discovery/2.0'}
+    headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36'}
   });
   const code = response.getResponseCode();
-  if (code < 200 || code >= 400) throw Error('Search returned HTTP '+code);
+  if (code < 200 || code >= 400) throw Error('RSS search returned HTTP '+code);
 
   const xml = response.getContentText();
-  const document = XmlService.parse(xml);
-  const root = document.getRootElement();
-  const channel = root.getChild('channel');
-  if (!channel) return [];
+  try {
+    const document = XmlService.parse(xml);
+    const root = document.getRootElement();
+    const channel = root.getChild('channel');
+    if (!channel) return [];
+    const items = channel.getChildren('item') || [];
+    const results = [];
+    items.forEach(function(item) {
+      const title = childText_(item,'title');
+      const link = childText_(item,'link');
+      const description = childText_(item,'description');
+      if (!link || !/^https?:\/\//i.test(link)) return;
+      if (isBlockedDiscoveryHost_(link)) return;
+      results.push({url:normalizeDiscoveryUrl_(link),title:title,description:description,query:query});
+    });
+    return results;
+  } catch (err) {
+    Logger.log('Bing RSS parse failure; using HTML fallback: '+err.message);
+    return [];
+  }
+}
 
-  const items = channel.getChildren('item') || [];
+function bingDiscoverHtml_(query) {
+  const url = OCE_DISCOVERY.SEARCH_HOST + encodeURIComponent(query) + '&count=10&mkt=en-US&setlang=en-US';
+  const response = UrlFetchApp.fetch(url, {
+    method:'get',
+    muteHttpExceptions:true,
+    followRedirects:true,
+    headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36'}
+  });
+  const code = response.getResponseCode();
+  if (code < 200 || code >= 400) throw Error('HTML search returned HTTP '+code);
+
+  const html = response.getContentText();
+  const blocks = html.match(/<li[^>]*class=["'][^"']*\\bb_algo\\b[^"']*["'][\\s\\S]*?<\\/li>/gi) || [];
   const results = [];
-  items.forEach(function(item) {
-    const title = childText_(item,'title');
-    const link = childText_(item,'link');
-    const description = childText_(item,'description');
-    if (!link || !/^https?:\/\//i.test(link)) return;
-    if (isBlockedDiscoveryHost_(link)) return;
+  blocks.forEach(function(block) {
+    const anchor = block.match(/<a[^>]+href=["'](https?:\\/\\/[^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i);
+    if (!anchor) return;
+    const link = decodeHtmlEntities_(anchor[1]);
+    if (!/^https?:\\/\\//i.test(link) || isBlockedDiscoveryHost_(link)) return;
+    const title = stripHtml_(decodeHtmlEntities_(anchor[2]));
+    const descriptionMatch = block.match(/<p[^>]*>([\\s\\S]*?)<\\/p>/i);
+    const description = descriptionMatch ? stripHtml_(decodeHtmlEntities_(descriptionMatch[1])) : '';
     results.push({url:normalizeDiscoveryUrl_(link),title:title,description:description,query:query});
   });
   return results;
+}
+
+function decodeHtmlEntities_(value) {
+  return String(value || '')
+    .replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'")
+    .replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+}
+
+function stripHtml_(value) {
+  return String(value || '').replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim();
 }
 
 function rankMissionDiscoveryCandidates_(items, objective) {
@@ -164,7 +217,7 @@ function rankMissionDiscoveryCandidates_(items, objective) {
 
     if (/uganda|ugandan/.test(haystack)) score += 8;
     if (/facebook|instagram|youtube|tiktok|linkedin/.test(host)) score -= 25;
-    if (/\.pdf($|[?#])/.test(url)) score -= 3;
+    if (/\\.pdf($|[?#])/.test(url)) score -= 3;
 
     ranked.push({url:url,title:item.title || url,description:item.description || '',query:item.query,priority:Math.max(1,Math.min(99,Math.round(score)))});
   });
@@ -185,7 +238,7 @@ function normalizeDiscoveryUrl_(value) {
 }
 
 function discoveryHost_(url) {
-  const match = String(url || '').match(/^https?:\/\/([^\/?#]+)/i);
+  const match = String(url || '').match(/^https?:\/\/([^\\/?#]+)/i);
   return match ? match[1].toLowerCase().replace(/^www\./,'').replace(/:\d+$/,'') : '';
 }
 
