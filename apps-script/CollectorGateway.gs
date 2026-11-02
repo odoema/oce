@@ -34,11 +34,33 @@ function doGet(e) {
       return gatewayJson_({ok:true,discovery:discoverSearchCandidates(objective)});
     }
 
+    if (action === 'intelligent_discover') {
+      var intelligentObjective = String(params.objective || params.topic || '').trim();
+      if (!intelligentObjective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
+      var intelligentLimit = Math.max(1, Math.min(50, Number(params.limit || 10)));
+      return gatewayJson_({ok:true,discovery:intelligentDiscover(intelligentObjective,intelligentLimit)});
+    }
+
+    if (action === 'profile_source') {
+      var sourceUrl = String(params.url || '').trim();
+      var sourceObjective = String(params.objective || params.topic || '').trim();
+      if (!sourceUrl) return gatewayJson_({ok:false,error:'Source URL is required.'});
+      return gatewayJson_({ok:true,profile:profileSourceIntelligence(sourceUrl,sourceObjective)});
+    }
+
     if (action === 'queue_discovery') {
       var discoveryObjective = String(params.objective || params.topic || '').trim();
       if (!discoveryObjective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
       var candidateLimit = Math.max(1, Math.min(50, Number(params.limit || 10)));
       return gatewayJson_({ok:true,discovery:queueDiscoveryCandidates(discoveryObjective,candidateLimit)});
+    }
+
+    if (action === 'intelligent_queue') {
+      var intelligentQueueObjective = String(params.objective || params.topic || '').trim();
+      if (!intelligentQueueObjective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
+      var intelligentQueueLimit = Math.max(1, Math.min(20, Number(params.limit || 10)));
+      var intelligentMissionId = String(params.mission_id || '').trim();
+      return gatewayJson_({ok:true,discovery:queueIntelligentDiscoveryCandidates(intelligentQueueObjective,intelligentQueueLimit,intelligentMissionId)});
     }
 
     if (action === 'run_worker') {
