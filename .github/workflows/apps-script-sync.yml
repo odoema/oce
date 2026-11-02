@@ -98,3 +98,5 @@ jobs:
         shell: bash
         run: |
           rm -rf node_modules package-lock.json
+
+# Rollback verification trigger: deploy the restored stable baseline.
