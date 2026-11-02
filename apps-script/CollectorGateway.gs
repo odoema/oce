@@ -34,6 +34,13 @@ function doGet(e) {
       return gatewayJson_({ok:true,discovery:discoverSearchCandidates(objective)});
     }
 
+    if (action === 'profile_source') {
+      var sourceUrl = String(params.url || '').trim();
+      var sourceObjective = String(params.objective || params.topic || '').trim();
+      if (!sourceUrl) return gatewayJson_({ok:false,error:'Source URL is required.'});
+      return gatewayJson_({ok:true,profile:profileSourceIntelligence(sourceUrl,sourceObjective)});
+    }
+
     if (action === 'queue_discovery') {
       var discoveryObjective = String(params.objective || params.topic || '').trim();
       if (!discoveryObjective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
