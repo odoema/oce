@@ -66,15 +66,26 @@ jobs:
           done
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('Manifest JSON: OK')"
 
+      - name: Verify clasp project identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_id="$(node -e "console.log(JSON.parse(require('fs').readFileSync('.clasp.json','utf8')).scriptId)")"
+          echo "clasp project: $actual_id"
+          if [ "$actual_id" != "$OCE_APPS_SCRIPT_ID" ]; then
+            echo "The checked-in .clasp.json does not target the canonical OCE Apps Script project."
+            exit 1
+          fi
+
       - name: Verify canonical deployment exists
         shell: bash
         run: |
           set -euo pipefail
-          echo "Verifying Apps Script project: $OCE_APPS_SCRIPT_ID"
-          deployments="$(clasp list-deployments "$OCE_APPS_SCRIPT_ID")"
+          echo "Verifying canonical deployment in clasp project context"
+          deployments="$(clasp list-deployments)"
           echo "$deployments"
           if ! grep -Fq "$OCE_APPS_SCRIPT_DEPLOYMENT_ID" <<< "$deployments"; then
-            echo "The canonical OCE deployment ID was not found in this Apps Script project."
+            echo "The canonical OCE deployment ID was not found in the OCE Apps Script project."
             exit 1
           fi
 
