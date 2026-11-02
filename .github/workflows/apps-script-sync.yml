@@ -23,6 +23,7 @@ jobs:
 
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      OCE_APPS_SCRIPT_ID: 1__bAterCWQop83g_fgfml8ggBQwd6Wzxl45veH_9Kk3rVBbSeHsG-qs
       OCE_APPS_SCRIPT_DEPLOYMENT_ID: AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO
       OCE_WEB_APP_URL: https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec
 
@@ -34,10 +35,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           if [ -z "${CLASPRC_JSON:-}" ]; then
             echo "Missing GitHub Actions secret: CLASPRC_JSON"
-            echo "Create it from the authenticated clasp .clasprc.json file."
             exit 1
           fi
 
@@ -53,35 +52,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           chmod 600 "$HOME/.clasprc.json"
-
-          export CLASPRC="$HOME/.clasprc.json"
-
           echo "clasp $(clasp --version)"
-          echo "Using clasp credentials: $CLASPRC"
           clasp show-authorized-user
 
       - name: Validate Apps Script source set
         shell: bash
         run: |
           set -euo pipefail
-
           for file in apps-script/*.gs; do
             node --check < "$file"
           done
-
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('Manifest JSON: OK')"
 
       - name: Verify canonical deployment exists
         shell: bash
         run: |
           set -euo pipefail
-
-          deployments="$(clasp list-deployments)"
+          echo "Verifying Apps Script project: $OCE_APPS_SCRIPT_ID"
+          deployments="$(clasp list-deployments "$OCE_APPS_SCRIPT_ID")"
           echo "$deployments"
-
           if ! grep -Fq "$OCE_APPS_SCRIPT_DEPLOYMENT_ID" <<< "$deployments"; then
             echo "The canonical OCE deployment ID was not found in this Apps Script project."
             exit 1
@@ -100,22 +91,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          response="$(curl -fsSL \
-            --retry 3 \
-            --retry-delay 2 \
-            --max-time 45 \
-            "${OCE_WEB_APP_URL}?action=health")"
-
+          response="$(curl -fsSL --retry 3 --retry-delay 2 --max-time 45 "${OCE_WEB_APP_URL}?action=health")"
           echo "$response"
-
           node -e '
             const x = JSON.parse(process.argv[1]);
-
-            if (!x.ok || x.service !== "OCE Collector Gateway") {
-              process.exit(1);
-            }
-
+            if (!x.ok || x.service !== "OCE Collector Gateway") process.exit(1);
             console.log(`Gateway ${x.version}: ${x.status}`);
           ' "$response"
 
