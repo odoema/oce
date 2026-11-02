@@ -1,145 +1,112 @@
 // OCE Public URL Collector V2
+// Canonical scraper implementation used by CollectorGateway.gs.
 // Public/authorized pages only. No login, CAPTCHA, paywall or access-control bypass.
 // Marketing consent is always handled separately by OCE.
 
-const OCE_SCRAPER = {
+var OCE_SCRAPER = {
   VERSION: '2.0.0',
   MAX_BYTES: 750000,
   MAX_REDIRECTS: 3
 };
 
-function doPost(e) {
-  try {
-    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    requireScraperToken_(body.token);
-    if (body.action !== 'scan') throw Error('Unsupported action');
-    return json_({ ok: true, result: scrapeUrl_(String(body.url || '')) });
-  } catch (err) {
-    return json_({ ok: false, error: String(err.message || err) });
-  }
-}
-
 function scrapeUrl_(input) {
-  let url = normalizeUrl_(input);
-  let response = null;
+  var url = normalizeUrl_(input);
+  var response = null;
 
-  for (let hop = 0; hop <= OCE_SCRAPER.MAX_REDIRECTS; hop++) {
+  for (var hop = 0; hop <= OCE_SCRAPER.MAX_REDIRECTS; hop++) {
     validatePublicUrl_(url);
-
     response = UrlFetchApp.fetch(url, {
       method: 'get',
       followRedirects: false,
       muteHttpExceptions: true,
-      headers: { 'User-Agent': 'OCE-Public-Collector/2.0' }
+      headers: {'User-Agent': 'OCE-Public-Collector/' + OCE_SCRAPER.VERSION}
     });
 
-    const code = response.getResponseCode();
-
-    if ([301, 302, 303, 307, 308].indexOf(code) >= 0) {
-      const headers = response.getHeaders();
-      const location = headers.Location || headers.location || headers.LOCATION;
-      if (!location) throw Error('Redirect without Location');
+    var status = response.getResponseCode();
+    if ([301,302,303,307,308].indexOf(status) !== -1) {
+      var headers = response.getHeaders();
+      var location = headers['Location'] || headers['location'] || headers['LOCATION'];
+      if (!location) throw new Error('Redirect without Location');
       url = resolveUrl_(String(location), url);
       continue;
     }
-
     break;
   }
 
-  if (!response) throw Error('No response');
+  if (!response) throw new Error('No response received');
 
-  const status = response.getResponseCode();
-  if (status < 200 || status >= 400) {
-    throw Error('Source returned HTTP ' + status);
-  }
+  var code = response.getResponseCode();
+  if (code < 200 || code >= 400) throw new Error('Source returned HTTP ' + code);
 
-  let html = response.getContentText();
-  if (html.length > OCE_SCRAPER.MAX_BYTES) {
-    html = html.substring(0, OCE_SCRAPER.MAX_BYTES);
-  }
-
+  var html = response.getContentText();
+  if (html.length > OCE_SCRAPER.MAX_BYTES) html = html.substring(0, OCE_SCRAPER.MAX_BYTES);
   return extractPage_(url, html);
 }
 
-function normalizeUrl_(value) {
-  let url = String(value || '').trim();
-  if (!url) throw Error('URL is required');
+function normalizeUrl_(input) {
+  var url = String(input || '').trim();
+  if (!url) throw new Error('URL is required');
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-
-  const parts = parseHttpUrl_(url);
-  if (!parts) throw Error('Invalid HTTP/HTTPS URL');
-
+  var parts = parseHttpUrl_(url);
+  if (!parts) throw new Error('Invalid HTTP/HTTPS URL');
   return parts.protocol + '://' + parts.host + parts.path;
 }
 
 function parseHttpUrl_(url) {
-  const match = String(url).match(/^\s*(https?):\/\/([^\/?#]+)([^?#]*)?(?:\?[^#]*)?(?:#.*)?\s*$/i);
+  var match = String(url).match(/^\s*(https?):\/\/([^\/?#]+)([^?#]*)?(?:\?[^#]*)?(?:#.*)?\s*$/i);
   if (!match) return null;
-
-  const protocol = match[1].toLowerCase();
-  let authority = match[2];
-  const path = match[3] || '/';
-
+  var protocol = match[1].toLowerCase();
+  var authority = match[2].toLowerCase();
+  var path = match[3] || '/';
   if (!authority) return null;
-
-  authority = authority.toLowerCase();
-  return { protocol: protocol, host: authority, path: path.charAt(0) === '/' ? path : '/' + path };
+  return {protocol: protocol, host: authority, path: path.charAt(0) === '/' ? path : '/' + path};
 }
 
 function validatePublicUrl_(url) {
-  const parsed = parseHttpUrl_(url);
-  if (!parsed) throw Error('Invalid HTTP/HTTPS URL');
+  var parsed = parseHttpUrl_(url);
+  if (!parsed) throw new Error('Invalid HTTP/HTTPS URL');
+  var host = parsed.host.replace(/:\d+$/, '');
 
-  let host = parsed.host;
-  host = host.replace(/:\d+$/, '');
-
-  if (
-    host === 'localhost' ||
-    host.endsWith('.localhost') ||
-    host === '127.0.0.1' ||
-    host === '::1' ||
-    host === '0.0.0.0'
-  ) throw Error('Local/internal host blocked');
-
-  if (/^169\.254\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) {
-    throw Error('Private/internal host blocked');
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') {
+    throw new Error('Local/internal host blocked');
   }
-
-  const private172 = host.match(/^172\.(\d+)\./);
+  if (/^169\.254\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) {
+    throw new Error('Private/internal host blocked');
+  }
+  var private172 = host.match(/^172\.(\d+)\./);
   if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) {
-    throw Error('Private/internal host blocked');
+    throw new Error('Private/internal host blocked');
   }
 }
 
 function resolveUrl_(target, base) {
   target = String(target || '').trim();
-
+  if (!target) throw new Error('Empty redirect target');
   if (/^https?:\/\//i.test(target)) return target;
 
-  const baseParts = parseHttpUrl_(base);
-  if (!baseParts) throw Error('Unable to resolve redirect');
-
-  const origin = baseParts.protocol + '://' + baseParts.host;
+  var baseParts = parseHttpUrl_(base);
+  if (!baseParts) throw new Error('Unable to resolve redirect');
+  var origin = baseParts.protocol + '://' + baseParts.host;
 
   if (target.indexOf('//') === 0) return baseParts.protocol + ':' + target;
   if (target.charAt(0) === '/') return origin + target;
 
-  const basePath = baseParts.path || '/';
-  const slash = basePath.lastIndexOf('/');
-  const directory = slash >= 0 ? basePath.substring(0, slash + 1) : '/';
+  var basePath = baseParts.path || '/';
+  var slash = basePath.lastIndexOf('/');
+  var directory = slash >= 0 ? basePath.substring(0, slash + 1) : '/';
   return origin + directory + target;
 }
 
 function extractPage_(url, html) {
-  const title = decode_(match_(html, /<title[^>]*>([\s\S]*?)<\/title>/i) || '');
-  const description = decode_(match_(html, /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["']/i) || '');
-  const links = [];
-  const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/ig;
-  let match;
+  var title = decode_(match_(html, /<title[^>]*>([\s\S]*?)<\/title>/i) || '');
+  var description = decode_(match_(html, /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["']/i) || '');
+  var links = [];
+  var linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/ig;
+  var match;
 
   while ((match = linkRegex.exec(html)) && links.length < 300) {
-    const label = stripHtml_(match[2]).replace(/\s+/g, ' ').trim();
-    if (label) links.push({ label: label, url: resolve_(match[1], url) });
+    var label = stripHtml_(match[2]).replace(/\s+/g, ' ').trim();
+    if (label) links.push({label: label, url: resolve_(match[1], url)});
   }
 
   return {
@@ -150,45 +117,35 @@ function extractPage_(url, html) {
     description: description,
     links: links,
     jsonld: extractJsonLd_(html),
-    tables: extractTables_(html).slice(0, 500),
-    text: stripHtml_(html).replace(/\s+/g, ' ').trim().slice(0, 12000),
+    tables: extractTables_(html),
+    text: stripHtml_(html).replace(/\s+/g, ' ').trim().substring(0, 12000),
     marketing_consent_required: true
   };
 }
 
 function extractJsonLd_(html) {
-  const objects = [];
-  const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/ig;
-  let match;
-
+  var objects = [];
+  var regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/ig;
+  var match;
   while ((match = regex.exec(html)) && objects.length < 20) {
-    try {
-      objects.push(JSON.parse(match[1].trim()));
-    } catch (err) {
-      // Ignore malformed JSON-LD blocks and continue safely.
-    }
+    try { objects.push(JSON.parse(match[1].trim())); } catch (err) {}
   }
-
   return objects;
 }
 
 function extractTables_(html) {
-  const rows = [];
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/ig;
-  let rowMatch;
-
+  var rows = [];
+  var rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/ig;
+  var rowMatch;
   while ((rowMatch = rowRegex.exec(html)) && rows.length < 500) {
-    const cells = [];
-    const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/ig;
-    let cellMatch;
-
+    var cells = [];
+    var cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/ig;
+    var cellMatch;
     while ((cellMatch = cellRegex.exec(rowMatch[1]))) {
       cells.push(stripHtml_(cellMatch[1]).replace(/\s+/g, ' ').trim());
     }
-
     if (cells.length) rows.push(cells);
   }
-
   return rows;
 }
 
@@ -210,24 +167,10 @@ function decode_(value) {
 }
 
 function match_(value, regex) {
-  const match = String(value || '').match(regex);
+  var match = String(value || '').match(regex);
   return match && match[1];
 }
 
 function resolve_(href, base) {
-  try {
-    return resolveUrl_(href, base);
-  } catch (err) {
-    return href;
-  }
-}
-
-function requireScraperToken_(token) {
-  const expected = PropertiesService.getScriptProperties().getProperty('OCE_SCRAPER_TOKEN');
-  if (!expected || !token || token !== expected) throw Error('Unauthorized');
-}
-
-function json_(payload) {
-  return ContentService.createTextOutput(JSON.stringify(payload))
-    .setMimeType(ContentService.MimeType.JSON);
+  try { return resolveUrl_(href, base); } catch (err) { return href; }
 }
