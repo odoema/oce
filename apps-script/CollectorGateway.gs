@@ -1,4 +1,4 @@
-// OCE Collector Gateway V4.5
+// OCE Collector Gateway V4.6
 // Browser-facing gateway for public collection and mission control.
 // No collector token is ever sent to the browser.
 // Public/authorized pages only. No login, CAPTCHA, paywall or access-control bypass.
@@ -9,7 +9,7 @@ function doGet(e) {
     var action = String(params.action || '').trim().toLowerCase();
 
     if (action === 'health') {
-      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.5.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','mission_queue_page','queue_worker','web_discovery','automation_status','health']});
+      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.6.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','mission_queue_page','queue_worker','web_discovery','automation_status','health']});
     }
 
     if (action === 'start_mission') {
@@ -20,10 +20,15 @@ function doGet(e) {
       var discoveryLimit = Number(params.discovery_limit || 100);
       discoveryLimit = Math.max(1, Math.min(100, Math.floor(discoveryLimit)));
       var started = startOceMission(topic,{active_limit:activeLimit,discovery_limit:discoveryLimit});
-      var discoverySeeds = seedSchoolSourcesForMission_(started.mission_id, topic);
-      var firstWorker = runOceMissionBatch(Math.min(5,activeLimit),started.mission_id);
-      var current = getOceMissionStatus(started.mission_id);
-      return gatewayJson_({ok:true,mission:current,discovery_seeds:discoverySeeds,initial_worker:firstWorker});
+      return gatewayJson_({ok:true,mission:started,discovery_queued:true,initial_worker:null});
+    }
+
+    if (action === 'run_discovery') {
+      var discoveryMissionId = String(params.mission_id || '').trim();
+      if (!discoveryMissionId) return gatewayJson_({ok:false,error:'Mission ID is required.'});
+      var discoveryMission = getOceMissionStatus(discoveryMissionId);
+      var discovery = discoverPublicSourcesForMission_(discoveryMissionId, discoveryMission.topic);
+      return gatewayJson_({ok:true,discovery:discovery});
     }
 
     if (action === 'mission_status') {
@@ -91,21 +96,21 @@ function gatewayJson_(payload) {
 }
 
 function testCollectorGatewayHealth() {
-  return {ok:true,gateway:'READY',version:'4.5.0',automation:getAutomationStatus_()};
+  return {ok:true,gateway:'READY',version:'4.6.0',automation:getAutomationStatus_()};
 }
 
 function testCollectorGatewayMissionIntegration() {
   return {
     ok:true,
-    gateway_version:'4.5.0',
+    gateway_version:'4.6.0',
     start_mission_available:typeof startOceMission==='function',
     mission_status_available:typeof getOceMissionStatus==='function',
     mission_queue_page_available:typeof getOceMissionQueuePage==='function',
     mission_expand_available:typeof expandOceMission==='function',
     worker_available:typeof runOceMissionBatch==='function',
     scraper_available:typeof scrapeUrl_==='function',
-    web_discovery_available:typeof seedSchoolSourcesForMission_==='function',
+    web_discovery_available:typeof discoverPublicSourcesForMission_==='function',
     automation_status_available:typeof getAutomationStatus_==='function',
-    ready:typeof startOceMission==='function' && typeof getOceMissionStatus==='function' && typeof getOceMissionQueuePage==='function' && typeof expandOceMission==='function' && typeof runOceMissionBatch==='function' && typeof scrapeUrl_==='function' && typeof seedSchoolSourcesForMission_==='function'
+    ready:typeof startOceMission==='function' && typeof getOceMissionStatus==='function' && typeof getOceMissionQueuePage==='function' && typeof expandOceMission==='function' && typeof runOceMissionBatch==='function' && typeof scrapeUrl_==='function' && typeof discoverPublicSourcesForMission_==='function'
   };
 }
