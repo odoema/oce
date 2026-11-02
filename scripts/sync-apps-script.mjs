@@ -7,6 +7,7 @@ const SCRIPT_ID = process.env.OCE_APPS_SCRIPT_ID;
 const CLASPRC_JSON = process.env.CLASPRC_JSON;
 const COMMIT_SHA = process.env.GITHUB_SHA || 'unknown';
 const SOURCE_DIR = path.resolve('apps-script');
+const MANAGED_DEPLOYMENT_PREFIX = 'OCE Collector Gateway — managed';
 
 function fail(message) { throw new Error(message); }
 if (!SCRIPT_ID) fail('OCE_APPS_SCRIPT_ID is required.');
@@ -85,7 +86,7 @@ async function createWebDeployment(script, versionNumber) {
       scriptId: SCRIPT_ID,
       versionNumber,
       manifestFileName: 'appsscript',
-      description: `OCE Collector Gateway — GitHub ${COMMIT_SHA.slice(0, 12)}`,
+      description: `${MANAGED_DEPLOYMENT_PREFIX} — ${COMMIT_SHA.slice(0, 12)}`,
     },
   });
 
@@ -94,7 +95,55 @@ async function createWebDeployment(script, versionNumber) {
   if (!deploymentId) fail('Apps Script deployment creation did not return a deployment ID.');
   if (!url) fail(`Created deployment ${deploymentId} but no web-app URL was returned. Check appsscript.json webapp settings.`);
 
-  return { id: deploymentId, url };
+  return { id: deploymentId, url, action: 'created' };
+}
+
+async function updateManagedDeployment(script, deployment, versionNumber) {
+  const deploymentId = deployment?.deploymentId;
+  if (!deploymentId) return null;
+
+  try {
+    console.log(`Updating managed OCE web deployment ${deploymentId} to Apps Script version ${versionNumber}...`);
+    const updated = await script.projects.deployments.update({
+      scriptId: SCRIPT_ID,
+      deploymentId,
+      requestBody: {
+        deploymentConfig: {
+          scriptId: SCRIPT_ID,
+          versionNumber,
+          manifestFileName: 'appsscript',
+          description: `${MANAGED_DEPLOYMENT_PREFIX} — ${COMMIT_SHA.slice(0, 12)}`,
+        },
+      },
+    });
+
+    const url = deploymentUrl(updated.data);
+    if (!url) return null;
+    return { id: deploymentId, url, action: 'updated' };
+  } catch (error) {
+    console.warn(`Managed deployment update was not possible: ${apiErrorSummary(error)}`);
+    return null;
+  }
+}
+
+async function getOrCreateWebDeployment(script, versionNumber) {
+  try {
+    const listed = await script.projects.deployments.list({ scriptId: SCRIPT_ID, pageSize: 100 });
+    const deployments = listed.data?.deployments || [];
+    const managed = deployments.find((item) => {
+      const description = String(item.deploymentConfig?.description || '');
+      return description.startsWith(MANAGED_DEPLOYMENT_PREFIX) && deploymentUrl(item);
+    });
+
+    if (managed) {
+      const updated = await updateManagedDeployment(script, managed, versionNumber);
+      if (updated) return updated;
+    }
+  } catch (error) {
+    console.warn(`Could not inspect existing Apps Script deployments: ${apiErrorSummary(error)}`);
+  }
+
+  return createWebDeployment(script, versionNumber);
 }
 
 async function main() {
@@ -131,8 +180,8 @@ async function main() {
   if (!versionNumber) fail('Apps Script version creation did not return a version number.');
   console.log(`Created Apps Script version ${versionNumber}.`);
 
-  const deployment = await createWebDeployment(script, versionNumber);
-  console.log(`Created OCE web deployment ${deployment.id} at version ${versionNumber}.`);
+  const deployment = await getOrCreateWebDeployment(script, versionNumber);
+  console.log(`${deployment.action === 'updated' ? 'Updated' : 'Created'} OCE web deployment ${deployment.id} at version ${versionNumber}.`);
   console.log(`OCE web app URL: ${deployment.url}`);
 
   if (process.env.GITHUB_ENV) {
