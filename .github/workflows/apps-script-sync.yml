@@ -58,7 +58,6 @@ jobs:
           set -euo pipefail
           printf '%s' "$CLASPRC_JSON" > .clasprc.json
           chmod 600 .clasprc.json
-          trap 'rm -f .clasprc.json' EXIT
           echo "clasp $(clasp --version)"
           clasp show-authorized-user
 
@@ -70,6 +69,17 @@ jobs:
             node --check < "$file"
           done
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('Manifest JSON: OK')"
+
+      - name: Verify target deployment exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployments="$(clasp list-deployments)"
+          echo "$deployments"
+          if ! grep -Fq "$OCE_APPS_SCRIPT_DEPLOYMENT_ID" <<< "$deployments"; then
+            echo "The configured OCE_APPS_SCRIPT_DEPLOYMENT_ID was not found in this Apps Script project."
+            exit 1
+          fi
 
       - name: Show Apps Script files to be pushed
         run: clasp show-file-status --json
@@ -87,3 +97,8 @@ jobs:
           response="$(curl -fsSL --retry 3 --retry-delay 2 --max-time 45 "${OCE_WEB_APP_URL}?action=health")"
           echo "$response"
           node -e 'const x=JSON.parse(process.argv[1]); if(!x.ok || x.service !== "OCE Collector Gateway") process.exit(1); console.log(`Gateway ${x.version}: ${x.status}`);' "$response"
+
+      - name: Remove temporary credentials
+        if: always()
+        shell: bash
+        run: rm -f .clasprc.json
