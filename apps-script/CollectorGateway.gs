@@ -20,9 +20,10 @@ function doGet(e) {
       var discoveryLimit = Number(params.discovery_limit || 100);
       discoveryLimit = Math.max(1, Math.min(100, Math.floor(discoveryLimit)));
       var started = startOceMission(topic,{active_limit:activeLimit,discovery_limit:discoveryLimit});
+      var schoolSeeds = seedSchoolSourcesForMission_(started.mission_id, topic);
       var firstWorker = runOceMissionBatch(Math.min(5,activeLimit),started.mission_id);
       var current = getOceMissionStatus(started.mission_id);
-      return gatewayJson_({ok:true,mission:current,initial_worker:firstWorker});
+      return gatewayJson_({ok:true,mission:current,school_seeds:schoolSeeds,initial_worker:firstWorker});
     }
 
     if (action === 'mission_status') {
@@ -103,7 +104,8 @@ function testCollectorGatewayMissionIntegration() {
     mission_expand_available:typeof expandOceMission==='function',
     worker_available:typeof runOceMissionBatch==='function',
     scraper_available:typeof scrapeUrl_==='function',
+    school_seed_available:typeof seedSchoolSourcesForMission_==='function',
     automation_status_available:typeof getAutomationStatus_==='function',
-    ready:typeof startOceMission==='function' && typeof getOceMissionStatus==='function' && typeof getOceMissionQueuePage==='function' && typeof expandOceMission==='function' && typeof runOceMissionBatch==='function' && typeof scrapeUrl_==='function'
+    ready:typeof startOceMission==='function' && typeof getOceMissionStatus==='function' && typeof getOceMissionQueuePage==='function' && typeof expandOceMission==='function' && typeof runOceMissionBatch==='function' && typeof scrapeUrl_==='function' && typeof seedSchoolSourcesForMission_==='function'
   };
 }
