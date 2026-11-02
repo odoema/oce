@@ -38,7 +38,7 @@ function ensureHeaders_(sheet,headers){
 function getOrCreateOceSpreadsheet_(){
   const props=PropertiesService.getScriptProperties();
   const id=props.getProperty(OCE_SOURCE_REGISTRY.SPREADSHEET_PROPERTY);
-  if(id){try{return SpreadsheetApp.openById(id);}catch(_){}}
+  if(id){try{return SpreadsheetApp.openById(id);}catch(_){} }
   const ss=SpreadsheetApp.create(OCE_SOURCE_REGISTRY.SPREADSHEET_NAME);
   props.setProperty(OCE_SOURCE_REGISTRY.SPREADSHEET_PROPERTY,ss.getId());
   return ss;
@@ -88,12 +88,17 @@ function enqueueRegisteredSource(sourceId,priority){
 
 function registerAndQueueSource(source){const registered=registerDiscoveredSource(source);return enqueueRegisteredSource(registered.source_id,source.priority);}
 
-function getSourceQueue(limit){
+function getSourceQueue(limit, missionId){
   const sheet=getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
   if(!sheet||sheet.getLastRow()<2)return[];
   const max=Math.min(Number(limit||100),OCE_SOURCE_REGISTRY.MAX_QUEUE);
-  const rows=sheet.getRange(2,1,sheet.getLastRow()-1,11).getValues();
-  return rows.filter(function(r){return String(r[4]).toUpperCase()==='QUEUED';})
+  const targetMission=String(missionId||'').trim();
+  return sheet.getRange(2,1,sheet.getLastRow()-1,11).getValues()
+    .filter(function(r){
+      if(String(r[4]).toUpperCase()!=='QUEUED')return false;
+      if(!targetMission)return true;
+      return String(r[10]||'').indexOf('mission_id='+targetMission)!==-1;
+    })
     .sort(function(a,b){return Number(b[3]||0)-Number(a[3]||0);}).slice(0,max)
     .map(function(r){return{queue_id:r[0],source_id:r[1],url:r[2],priority:r[3],status:r[4],queued_at:r[5],attempt_count:r[8],source:r[10]};});
 }
