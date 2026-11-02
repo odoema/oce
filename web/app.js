@@ -50,6 +50,10 @@ function normalizePhone(value) {
   return cleaned;
 }
 
+function decodeUriComponentSafe(value) {
+  try { return decodeURIComponent(String(value || '')); } catch (_) { return String(value || ''); }
+}
+
 function extractJsonLdObjects(data) {
   const raw = asArray(data.jsonld);
   const out = [];
@@ -111,27 +115,34 @@ function findContactIndicators(data, objects) {
   const contactPages = [];
 
   const addEmail = (value, source, confidence) => {
-    const email = normalizeEmail(value);
+    const email = normalizeEmail(decodeUriComponentSafe(value).replace(/^mailto:/i, '').split('?')[0]);
     if (email && /\S+@\S+\.\S+/.test(email) && !emails.has(email)) {
       emails.set(email, { value: email, source, confidence });
     }
   };
   const addPhone = (value, source, confidence) => {
-    const phone = normalizePhone(value);
+    const phone = normalizePhone(decodeUriComponentSafe(value).replace(/^tel:/i, '').split(/[?#]/)[0]);
     if (phone && phone.replace(/\D/g, '').length >= 7 && phone.replace(/\D/g, '').length <= 15 && !phones.has(phone)) {
       phones.set(phone, { value: phone, source, confidence });
     }
   };
 
-  const serialized = JSON.stringify(links);
-  let m;
-  const emailLinkRe = /mailto:([^?#\s>]+)/ig;
-  while ((m = emailLinkRe.exec(serialized)) !== null) addEmail(m[1], 'mailto link', 'HIGH');
+  // Inspect each discovered link directly. Do not regex JSON.stringify(links):
+  // serialized objects can make the capture cross into the next link label.
+  links.forEach(link => {
+    const href = String(link.url || '').trim();
+    if (/^mailto:/i.test(href)) addEmail(href, 'mailto link', 'HIGH');
+    if (/^tel:/i.test(href)) addPhone(href, 'tel link', 'HIGH');
 
-  const phoneLinkRe = /tel:([^?#\s>]+)/ig;
-  while ((m = phoneLinkRe.exec(serialized)) !== null) addPhone(m[1], 'tel link', 'HIGH');
+    const label = String(link.label || '').trim();
+    const haystack = (label + ' ' + href).toLowerCase();
+    if (/contact|about|location|reach us|customer service|get in touch/.test(haystack)) {
+      contactPages.push({ label: label || 'Contact page', url: href });
+    }
+  });
 
   const publicEmailRe = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/ig;
+  let m;
   while ((m = publicEmailRe.exec(text)) !== null) addEmail(m[0], 'page text', 'MEDIUM');
 
   const publicPhoneRe = /(?:\+?\d[\d\s().-]{6,}\d)/g;
@@ -145,15 +156,6 @@ function findContactIndicators(data, objects) {
       addEmail(point.email, 'JSON-LD contactPoint', 'HIGH');
       addPhone(point.telephone, 'JSON-LD contactPoint', 'HIGH');
     });
-  });
-
-  links.forEach(link => {
-    const label = String(link.label || '').trim();
-    const href = String(link.url || '').toLowerCase();
-    const haystack = (label + ' ' + href).toLowerCase();
-    if (/contact|about|location|reach us|customer service|get in touch/.test(haystack)) {
-      contactPages.push({ label: label || 'Contact page', url: link.url });
-    }
   });
 
   return {
