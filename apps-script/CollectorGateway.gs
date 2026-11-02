@@ -1,4 +1,4 @@
-// OCE Collector Gateway V4.3
+// OCE Collector Gateway V4.4
 // Browser-facing gateway for public collection and mission control.
 // No collector token is ever sent to the browser.
 // Public/authorized pages only. No login, CAPTCHA, paywall or access-control bypass.
@@ -9,7 +9,7 @@ function doGet(e) {
     var action = String(params.action || '').trim().toLowerCase();
 
     if (action === 'health') {
-      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.3.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','mission_queue_page','queue_worker','automation_status','health']});
+      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.4.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','mission_queue_page','queue_worker','automation_status','health']});
     }
 
     if (action === 'start_mission') {
@@ -17,7 +17,12 @@ function doGet(e) {
       if (!topic) return gatewayJson_({ok:false,error:'Mission topic is required.'});
       var activeLimit = Number(params.active_limit || 300);
       activeLimit = Math.max(1, Math.min(10000, Math.floor(activeLimit)));
-      return gatewayJson_({ok:true,mission:startOceMission(topic,{active_limit:activeLimit})});
+      var discoveryLimit = Number(params.discovery_limit || 100);
+      discoveryLimit = Math.max(1, Math.min(100, Math.floor(discoveryLimit)));
+      var started = startOceMission(topic,{active_limit:activeLimit,discovery_limit:discoveryLimit});
+      var firstWorker = runOceMissionBatch(Math.min(5,activeLimit),started.mission_id);
+      var current = getOceMissionStatus(started.mission_id);
+      return gatewayJson_({ok:true,mission:current,initial_worker:firstWorker});
     }
 
     if (action === 'mission_status') {
@@ -85,13 +90,13 @@ function gatewayJson_(payload) {
 }
 
 function testCollectorGatewayHealth() {
-  return {ok:true,gateway:'READY',version:'4.3.0',automation:getAutomationStatus_()};
+  return {ok:true,gateway:'READY',version:'4.4.0',automation:getAutomationStatus_()};
 }
 
 function testCollectorGatewayMissionIntegration() {
   return {
     ok:true,
-    gateway_version:'4.3.0',
+    gateway_version:'4.4.0',
     start_mission_available:typeof startOceMission==='function',
     mission_status_available:typeof getOceMissionStatus==='function',
     mission_queue_page_available:typeof getOceMissionQueuePage==='function',
