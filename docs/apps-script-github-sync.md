@@ -6,10 +6,10 @@ The workflow `.github/workflows/apps-script-sync.yml` uses `@google/clasp` to:
 
 1. validate every `.gs` file and the Apps Script manifest;
 2. push the GitHub Apps Script source to the existing OCE Apps Script project;
-3. update the existing web-app deployment rather than creating a new deployment;
+3. update the existing OCE web-app deployment instead of creating a new deployment;
 4. verify the canonical OCE Collector Gateway `/exec?action=health` endpoint.
 
-This preserves the existing web-app URL when the existing deployment ID is supplied.
+The current canonical deployment ID is already wired into the workflow, so no second deployment secret is needed.
 
 ## One-time setup
 
@@ -39,34 +39,31 @@ The project editor is:
 
 `https://script.google.com/home/projects/1__bAterCWQop83g_fgfml8ggBQwd6Wzxl45veH_9Kk3rVBbSeHsG-qs/edit`
 
-### 4. Find the existing web-app deployment ID
+### 4. Add the GitHub Actions secret
 
-From the OCE project directory, run:
+In the GitHub repository settings, open **Secrets and variables → Actions → New repository secret**.
+
+Create exactly one secret:
+
+- `CLASPRC_JSON` — paste the complete contents of the local `.clasprc.json` file.
+
+The current canonical deployment ID is already configured in the workflow and is not required as a secret.
+
+### 5. Optional local deployment check
+
+From the OCE repository root:
 
 ```bash
 npx @google/clasp@3.4.1 list-deployments
 ```
 
-Identify the deployment that corresponds to the current canonical OCE `/exec` URL.
-
-Do **not** create a new deployment for this setup. The workflow is designed to update the existing deployment.
-
-### 5. Add two GitHub Actions secrets
-
-In the GitHub repository settings, open **Secrets and variables → Actions → New repository secret**.
-
-Create:
-
-- `CLASPRC_JSON` — paste the complete contents of the local `.clasprc.json` file.
-- `OCE_APPS_SCRIPT_DEPLOYMENT_ID` — the existing OCE web-app deployment ID.
-
-These values are consumed only by GitHub Actions. They are never stored in the repository source.
+You should see the existing deployment used by the canonical OCE `/exec` URL.
 
 ## After setup
 
 Every push to `main` that changes `apps-script/**` automatically runs the sync workflow.
 
-The workflow will stop before changing Apps Script if either secret is missing. This prevents an accidental source push without a valid deployment configuration.
+The workflow stops before changing Apps Script if `CLASPRC_JSON` is missing. It also verifies that the known canonical deployment exists before pushing source.
 
 The final smoke test checks:
 
@@ -88,7 +85,7 @@ The Apps Script project can also be rolled back by restoring a known-good Git co
 
 - `UrlScraper.gs` remains protected by the existing public-source-only safeguards.
 - GitHub is the source of truth for Apps Script source files.
-- Google OAuth credentials are GitHub Secrets, not repository files.
-- The deployment ID is supplied as a secret so the canonical `/exec` deployment can be updated without changing its URL.
+- Google OAuth credentials are stored only as a GitHub Actions secret, not in repository source.
+- The workflow keeps the existing canonical deployment ID rather than creating a new web-app URL.
 - The workflow does not enable or add any new Apps Script runtime scopes.
 - `clasp push` is not an atomic Apps Script API operation, so production changes should continue to pass the repository validation workflow first.
