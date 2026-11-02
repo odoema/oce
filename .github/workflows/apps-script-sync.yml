@@ -77,10 +77,25 @@ jobs:
             exit 1
           fi
 
+      - name: Reconcile remote Apps Script manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/oce-remote"
+          mkdir -p "$RUNNER_TEMP/oce-remote"
+          cd "$RUNNER_TEMP/oce-remote"
+          clasp clone-script "$OCE_APPS_SCRIPT_ID" --rootDir remote
+          test -f remote/appsscript.json
+          cp remote/appsscript.json "$GITHUB_WORKSPACE/apps-script/appsscript.json"
+          echo "Using the canonical project's existing manifest as the sync baseline."
+          cat "$GITHUB_WORKSPACE/apps-script/appsscript.json"
+
       - name: Show Apps Script files to be pushed
         run: clasp show-file-status --json
 
       - name: Push GitHub source to Apps Script
+        env:
+          DEBUG: clasp:*
         run: clasp push --force
 
       - name: Redeploy existing OCE web app deployment
