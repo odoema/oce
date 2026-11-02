@@ -111,16 +111,15 @@ function renderQueuePager(pageData) {
 }
 
 async function loadMissionQueuePage(page) {
-  if (!oceMissionId) return;
   const requestedPage = Math.max(1, Number(page || 1));
   const serial = ++oceQueueRequestSerial;
   try {
-    const payload = await missionApi('mission_queue_page', {
-      mission_id: oceMissionId,
-      page: String(requestedPage),
-      page_size: String(oceQueuePageSize)
-    });
-    if (serial !== oceQueueRequestSerial || !oceMissionId) return;
+    const action = oceMissionId ? 'mission_queue_page' : 'queue_page';
+    const params = oceMissionId
+      ? { mission_id: oceMissionId, page: String(requestedPage), page_size: String(oceQueuePageSize) }
+      : { page: String(requestedPage), page_size: String(oceQueuePageSize) };
+    const payload = await missionApi(action, params);
+    if (serial !== oceQueueRequestSerial) return;
     const data = payload.queue || {};
     oceQueuePage = Number(data.page || requestedPage);
     renderQueueRows(data.items || []);
@@ -230,7 +229,7 @@ function initMissionControl() {
   run.onclick = startPersistentMission;
 
   const notice = document.querySelector('.scout-queue-card .notice');
-  if (notice) notice.textContent = 'Persistent mission queue. Collection is controlled by the OCE Queue Worker; the browser only displays live status.';
+  if (notice) notice.textContent = 'Persistent queue. Showing the live global queue until a mission is selected; mission runs are then filtered automatically.';
 
   scout$('scoutClear').onclick = () => scoutSetStatus('Persistent queue is managed by OCE Mission Control and is not cleared from the browser.');
   scout$('scoutExport').onclick = () => {
@@ -245,6 +244,10 @@ function initMissionControl() {
       URL.revokeObjectURL(url);
     }).catch(error => scoutSetStatus(String(error.message || error)));
   };
+
+  // The queue exists independently of the browser's current mission state.
+  // Load it immediately so the operator can see the live persistent queue.
+  loadMissionQueuePage(1);
 }
 
 document.addEventListener('DOMContentLoaded', initMissionControl);
