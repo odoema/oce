@@ -1,9 +1,10 @@
 /* OCE Source Collector UI
- * LEGO block: URL -> Scan -> Source Intelligence -> Normalize -> Review
+ * LEGO blocks: URL -> Scan -> Source Intelligence -> Contact Intelligence -> Review
  * Backend configuration belongs to infrastructure, never to the operator.
+ * Public visibility is not marketing consent.
  */
 const CONFIG = {
-  COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmJWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec'
+  COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec'
 };
 
 let latest = null;
@@ -41,6 +42,14 @@ function normalizeUgandaPhone(value) {
   return s;
 }
 
+function normalizePhone(value) {
+  const cleaned = String(value || '').trim().replace(/[^\d+]/g, '');
+  if (/^(?:0?7\d{8}|2567\d{8})$/.test(cleaned) || /^\+2567\d{8}$/.test(cleaned)) {
+    return normalizeUgandaPhone(cleaned);
+  }
+  return cleaned;
+}
+
 function extractJsonLdObjects(data) {
   const raw = asArray(data.jsonld);
   const out = [];
@@ -54,10 +63,17 @@ function extractJsonLdObjects(data) {
   return out;
 }
 
+function scalar(value) {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  return '';
+}
+
 function findFirst(objects, keys) {
   for (const obj of objects) {
     for (const key of keys) {
-      if (obj[key] && typeof obj[key] !== 'object') return String(obj[key]);
+      const value = scalar(obj[key]);
+      if (value) return value;
     }
   }
   return '';
@@ -87,26 +103,49 @@ function findAddress(objects) {
   return '';
 }
 
-function findContactIndicators(data) {
+function findContactIndicators(data, objects) {
   const links = asArray(data.links);
   const text = String(data.text || '');
-  const emails = new Set();
-  const phones = new Set();
+  const emails = new Map();
+  const phones = new Map();
   const contactPages = [];
+
+  const addEmail = (value, source, confidence) => {
+    const email = normalizeEmail(value);
+    if (email && /\S+@\S+\.\S+/.test(email) && !emails.has(email)) {
+      emails.set(email, { value: email, source, confidence });
+    }
+  };
+  const addPhone = (value, source, confidence) => {
+    const phone = normalizePhone(value);
+    if (phone && phone.replace(/\D/g, '').length >= 7 && phone.replace(/\D/g, '').length <= 15 && !phones.has(phone)) {
+      phones.set(phone, { value: phone, source, confidence });
+    }
+  };
 
   const serialized = JSON.stringify(links);
   let m;
   const emailLinkRe = /mailto:([^?#\s>]+)/ig;
-  while ((m = emailLinkRe.exec(serialized)) !== null) emails.add(normalizeEmail(m[1]));
+  while ((m = emailLinkRe.exec(serialized)) !== null) addEmail(m[1], 'mailto link', 'HIGH');
 
   const phoneLinkRe = /tel:([^?#\s>]+)/ig;
-  while ((m = phoneLinkRe.exec(serialized)) !== null) phones.add(normalizeUgandaPhone(m[1]));
+  while ((m = phoneLinkRe.exec(serialized)) !== null) addPhone(m[1], 'tel link', 'HIGH');
 
   const publicEmailRe = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/ig;
-  while ((m = publicEmailRe.exec(text)) !== null) emails.add(normalizeEmail(m[0]));
+  while ((m = publicEmailRe.exec(text)) !== null) addEmail(m[0], 'page text', 'MEDIUM');
 
-  const publicPhoneRe = /(?:\+?256|0)(?:7|3)\d{8}\b/g;
-  while ((m = publicPhoneRe.exec(text)) !== null) phones.add(normalizeUgandaPhone(m[0]));
+  const publicPhoneRe = /(?:\+?\d[\d\s().-]{6,}\d)/g;
+  while ((m = publicPhoneRe.exec(text)) !== null) addPhone(m[0].trim(), 'page text', 'MEDIUM');
+
+  objects.forEach(obj => {
+    addEmail(obj.email, 'JSON-LD', 'HIGH');
+    addPhone(obj.telephone, 'JSON-LD', 'HIGH');
+    asArray(obj.contactPoint).forEach(point => {
+      if (!point || typeof point !== 'object') return;
+      addEmail(point.email, 'JSON-LD contactPoint', 'HIGH');
+      addPhone(point.telephone, 'JSON-LD contactPoint', 'HIGH');
+    });
+  });
 
   links.forEach(link => {
     const label = String(link.label || '').trim();
@@ -118,21 +157,23 @@ function findContactIndicators(data) {
   });
 
   return {
-    emails: unique([...emails]).slice(0, 50),
-    phones: unique([...phones]).slice(0, 50),
+    emails: [...emails.values()].slice(0, 50),
+    phones: [...phones.values()].slice(0, 50),
     contactPages: contactPages.slice(0, 20)
   };
 }
 
 function buildNormalizedCandidates(indicators, sourceUrl) {
   const candidates = [];
-  indicators.emails.forEach(email => candidates.push({
-    kind: 'email', value: normalizeEmail(email), normalized: normalizeEmail(email),
-    source_url: sourceUrl, consent_status: 'NO_CONSENT', review_status: 'PENDING'
+  indicators.emails.forEach(item => candidates.push({
+    kind: 'email', value: item.value, normalized: normalizeEmail(item.value),
+    source: item.source, confidence: item.confidence, source_url: sourceUrl,
+    consent_status: 'NO_CONSENT', review_status: 'PENDING'
   }));
-  indicators.phones.forEach(phone => candidates.push({
-    kind: 'phone', value: phone, normalized: normalizeUgandaPhone(phone),
-    source_url: sourceUrl, consent_status: 'NO_CONSENT', review_status: 'PENDING'
+  indicators.phones.forEach(item => candidates.push({
+    kind: 'phone', value: item.value, normalized: normalizePhone(item.value),
+    source: item.source, confidence: item.confidence, source_url: sourceUrl,
+    consent_status: 'NO_CONSENT', review_status: 'PENDING'
   }));
   return candidates;
 }
@@ -140,9 +181,7 @@ function buildNormalizedCandidates(indicators, sourceUrl) {
 function buildSourceIntelligence(data) {
   const objects = extractJsonLdObjects(data);
   const types = findType(objects);
-  const indicators = findContactIndicators(data);
-  const candidates = buildNormalizedCandidates(indicators, data.source_url || '');
-
+  const indicators = findContactIndicators(data, objects);
   return {
     organization: findFirst(objects, ['name', 'legalName', 'alternateName']) || data.title || '',
     type: types.join(', '),
@@ -151,7 +190,7 @@ function buildSourceIntelligence(data) {
     description: findFirst(objects, ['description']) || data.description || '',
     structuredDataTypes: types,
     contactIndicators: indicators,
-    normalizedCandidates: candidates,
+    normalizedCandidates: buildNormalizedCandidates(indicators, data.source_url || ''),
     consentStatus: 'NO_CONSENT',
     sourceUrl: data.source_url || '',
     collectedAt: data.collected_at || ''
@@ -162,8 +201,8 @@ function renderCandidates(info) {
   const candidates = asArray(info.normalizedCandidates);
   $('candidateCount').textContent = String(candidates.length);
   $('candidateRows').innerHTML = candidates.length
-    ? candidates.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.kind)}</td><td>${esc(c.normalized)}</td><td>${esc(c.consent_status)}</td><td>${esc(c.review_status)}</td></tr>`).join('')
-    : '<tr><td colspan="5">No contact candidates detected on this page.</td></tr>';
+    ? candidates.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.kind)}</td><td>${esc(c.normalized)}</td><td>${esc(c.source)}</td><td>${esc(c.confidence)}</td><td>${esc(c.consent_status)}</td></tr>`).join('')
+    : '<tr><td colspan="6">No contact candidates detected on this page.</td></tr>';
   $('candidateReview').classList.remove('hidden');
 }
 
