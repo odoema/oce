@@ -97,3 +97,7 @@ The stable URL scraper is treated as an ingestion foundation. New capabilities s
 7. Consent-aware contact import and review workflow.
 8. Campaign analytics and delivery lifecycle.
 9. National marketing intelligence dashboard.
+
+## Rollback marker
+
+Main has been restored to the last known stable Mission Control baseline for recovery and verification.
