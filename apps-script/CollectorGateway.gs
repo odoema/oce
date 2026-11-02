@@ -34,6 +34,13 @@ function doGet(e) {
       return gatewayJson_({ok:true,discovery:discoverSearchCandidates(objective)});
     }
 
+    if (action === 'intelligent_discover') {
+      var intelligentObjective = String(params.objective || params.topic || '').trim();
+      if (!intelligentObjective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
+      var intelligentLimit = Math.max(1, Math.min(50, Number(params.limit || 10)));
+      return gatewayJson_({ok:true,discovery:intelligentDiscover(intelligentObjective,intelligentLimit)});
+    }
+
     if (action === 'profile_source') {
       var sourceUrl = String(params.url || '').trim();
       var sourceObjective = String(params.objective || params.topic || '').trim();
