@@ -11,6 +11,7 @@ let oceMissionTimer = null;
 let oceQueuePage = 1;
 let oceQueuePageSize = OCE_QUEUE_DEFAULT_PAGE_SIZE;
 let oceQueueTotalPages = 0;
+let oceQueueRequestSeq = 0;
 
 function missionApiUrl(action, params = {}) {
   const query = new URLSearchParams({ action, ...params });
@@ -53,6 +54,22 @@ function missionStatusText(status) {
   }[status] || status || 'Working';
 }
 
+function setQueuePaginationControls() {
+  const prev = scout$('queuePrev');
+  const next = scout$('queueNext');
+  const hasPages = oceQueueTotalPages > 0;
+  const hasMission = Boolean(oceMissionId);
+
+  if (prev) {
+    prev.disabled = !hasMission || !hasPages || oceQueuePage <= 1;
+    prev.setAttribute('aria-disabled', String(prev.disabled));
+  }
+  if (next) {
+    next.disabled = !hasMission || !hasPages || oceQueuePage >= oceQueueTotalPages;
+    next.setAttribute('aria-disabled', String(next.disabled));
+  }
+}
+
 function renderPersistentQueue(items, pagination) {
   const queue = Array.isArray(items) ? items : [];
   const page = pagination || {};
@@ -67,22 +84,22 @@ function renderPersistentQueue(items, pagination) {
 
   const body = scout$('scoutQueueRows');
   const startIndex = total ? ((currentPage - 1) * pageSize) : 0;
-  body.innerHTML = queue.length
-    ? queue.map((item, index) => `
-      <tr>
-        <td>${startIndex + index + 1}</td>
-        <td><span class="queue-priority">${scoutEsc(item.priority)}</span></td>
-        <td><a href="${scoutEsc(item.url)}" target="_blank" rel="noopener">${scoutEsc(item.url)}</a></td>
-        <td>${scoutEsc(item.source || 'mission')}</td>
-        <td>${scoutEsc(item.status)}</td>
-        <td>${scoutEsc(item.queued_at ? new Date(item.queued_at).toLocaleString() : '')}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="6">No source records on this page.</td></tr>';
+  if (body) {
+    body.innerHTML = queue.length
+      ? queue.map((item, index) => `
+        <tr>
+          <td>${startIndex + index + 1}</td>
+          <td><span class="queue-priority">${scoutEsc(item.priority)}</span></td>
+          <td><a href="${scoutEsc(item.url)}" target="_blank" rel="noopener">${scoutEsc(item.url)}</a></td>
+          <td>${scoutEsc(item.source || 'mission')}</td>
+          <td>${scoutEsc(item.status)}</td>
+          <td>${scoutEsc(item.queued_at ? new Date(item.queued_at).toLocaleString() : '')}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="6">No source records on this page.</td></tr>';
+  }
 
   const info = scout$('queuePageInfo');
   const label = scout$('queuePageLabel');
-  const prev = scout$('queuePrev');
-  const next = scout$('queueNext');
   if (info) {
     if (!total) info.textContent = 'No queue records loaded.';
     else {
@@ -92,8 +109,7 @@ function renderPersistentQueue(items, pagination) {
     }
   }
   if (label) label.textContent = `Page ${currentPage} of ${Math.max(1, totalPages)}`;
-  if (prev) prev.disabled = currentPage <= 1 || !totalPages;
-  if (next) next.disabled = currentPage >= totalPages || !totalPages;
+  setQueuePaginationControls();
 }
 
 async function loadMissionQueuePage(page = oceQueuePage) {
@@ -101,14 +117,28 @@ async function loadMissionQueuePage(page = oceQueuePage) {
     renderPersistentQueue([], {page:1,page_size:oceQueuePageSize,total:0,total_pages:0});
     return;
   }
+
+  const requestedPage = Math.max(1, Math.floor(Number(page) || 1));
+  const requestSeq = ++oceQueueRequestSeq;
+
   try {
     const payload = await missionApi('mission_queue_page', {
       mission_id: oceMissionId,
-      page: String(Math.max(1, page)),
+      page: String(requestedPage),
       page_size: String(oceQueuePageSize)
     });
+
+    // Mission polling and manual pagination can overlap. Only the newest queue
+    // request is allowed to paint the table, otherwise an older page-1 response
+    // can overwrite a freshly selected page-2/page-3 response.
+    if (requestSeq !== oceQueueRequestSeq) return;
+    if (!payload.queue || !Array.isArray(payload.queue.items)) {
+      throw new Error('Gateway returned an invalid Source Queue pagination payload.');
+    }
     renderPersistentQueue(payload.queue.items, payload.queue);
   } catch (error) {
+    if (requestSeq !== oceQueueRequestSeq) return;
+    setQueuePaginationControls();
     scoutSetStatus(`Source Queue pagination temporarily unavailable: ${String(error.message || error)}`);
   }
 }
@@ -145,6 +175,7 @@ function renderMission(mission) {
   }
   if (batch) batch.disabled = !mission.mission_id || !deferred;
 
+  setQueuePaginationControls();
   scoutSetStatus(`Mission ${missionStatusText(mission.status).toLowerCase()}: ${processed} processed, ${active} active, ${deferred} waiting.`);
 }
 
@@ -177,6 +208,7 @@ async function startPersistentMission() {
   oceMissionId = '';
   oceQueuePage = 1;
   oceQueueTotalPages = 0;
+  oceQueueRequestSeq += 1;
 
   scout$('scoutRun').disabled = true;
   scout$('scoutRun').textContent = 'Starting…';
@@ -215,6 +247,7 @@ async function expandCurrentMission() {
   try {
     const payload = await missionApi('expand_mission', { mission_id: oceMissionId, additional: String(batch) });
     oceQueuePage = 1;
+    oceQueueRequestSeq += 1;
     renderMission(payload.result.mission);
     scoutSetStatus(`Added the next ${payload.result.promoted || 0} sources to the active mission set.`);
     fetch(missionApiUrl('run_worker', { limit: '1' }), { cache: 'no-store' }).catch(() => {});
