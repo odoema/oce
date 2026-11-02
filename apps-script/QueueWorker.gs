@@ -1,9 +1,6 @@
 /* OCE Queue Worker V1
  * LEGO block: persistent SOURCE_QUEUE -> controlled collection -> results.
  * It orchestrates the existing UrlScraper V2.0.0 function scrapeUrl_().
- *
- * Mission control owns an active mission. When one exists, the worker processes
- * that mission's QUEUED rows first so a global queue cannot starve a live mission.
  */
 
 const OCE_QUEUE_WORKER = {
@@ -11,7 +8,6 @@ const OCE_QUEUE_WORKER = {
   QUEUE_SHEET: 'SOURCE_QUEUE',
   REGISTRY_SHEET: 'SOURCE_REGISTRY',
   RESULTS_SHEET: 'SOURCE_RESULTS',
-  RUNS_SHEET: 'SCOUT_RUNS',
   MAX_BATCH: 10,
   LOCK_WAIT_MS: 30000
 };
@@ -32,9 +28,8 @@ function runQueueWorker(limit) {
   try {
     setupQueueWorker();
     const max = Math.max(1, Math.min(OCE_QUEUE_WORKER.MAX_BATCH, Number(limit || 5)));
-    const missionId = getPriorityMissionId_();
-    const queueItems = getSourceQueue(max, missionId);
-    const summary = {version:OCE_QUEUE_WORKER.VERSION,requested:max,mission_id:missionId || '',processed:0,completed:0,failed:0,blocked:0,items:[]};
+    const queueItems = getSourceQueue(max);
+    const summary = {version:OCE_QUEUE_WORKER.VERSION,requested:max,processed:0,completed:0,failed:0,blocked:0,items:[]};
     queueItems.forEach(function(item) {
       const outcome = processQueueItem_(item);
       summary.processed += 1;
@@ -47,35 +42,6 @@ function runQueueWorker(limit) {
   } finally {
     lock.releaseLock();
   }
-}
-
-/* Select the newest mission that still has active QUEUED/SCRAPING work.
- * This keeps automated worker ticks focused on the operator's current mission
- * instead of consuming unrelated global queue records first.
- */
-function getPriorityMissionId_() {
-  const ss = getOceSpreadsheet_();
-  const runs = ss.getSheetByName(OCE_QUEUE_WORKER.RUNS_SHEET);
-  const queue = ss.getSheetByName(OCE_QUEUE_WORKER.QUEUE_SHEET);
-  if (!runs || runs.getLastRow() < 2 || !queue || queue.getLastRow() < 2) return '';
-
-  const runRows = runs.getRange(2,1,runs.getLastRow()-1,13).getValues();
-  const queueRows = queue.getRange(2,1,queue.getLastRow()-1,11).getValues();
-  const candidates = [];
-
-  runRows.forEach(function(row) {
-    const missionId = String(row[0] || '').trim();
-    const status = String(row[8] || '').toUpperCase();
-    if (!missionId || ['QUEUED','COLLECTING','BATCH_READY'].indexOf(status) === -1) return;
-    const queued = queueRows.some(function(q) {
-      return String(q[10] || '').indexOf('mission_id='+missionId) !== -1 && String(q[4] || '').toUpperCase() === 'QUEUED';
-    });
-    if (!queued) return;
-    candidates.push({missionId:missionId,startedAt:row[1] instanceof Date ? row[1].getTime() : new Date(row[1] || 0).getTime()});
-  });
-
-  candidates.sort(function(a,b){return b.startedAt - a.startedAt;});
-  return candidates.length ? candidates[0].missionId : '';
 }
 
 function processQueueItem_(item) {
@@ -122,21 +88,6 @@ function queueWorkerStatus() {
   const out = {queued:0,scraping:0,completed:0,failed:0,blocked:0,total:rows.length};
   rows.forEach(function(r){ const s=String(r[4]||'').toLowerCase(); if (Object.prototype.hasOwnProperty.call(out,s)) out[s] += 1; });
   return out;
-}
-
-function getSourceQueue(limit, missionId) {
-  const sheet = getOceSpreadsheet_().getSheetByName(OCE_QUEUE_WORKER.QUEUE_SHEET);
-  if (!sheet || sheet.getLastRow() < 2) return [];
-  const max = Math.min(Number(limit || 100), OCE_SOURCE_REGISTRY.MAX_QUEUE);
-  const missionTag = String(missionId || '').trim();
-  const rows = sheet.getRange(2,1,sheet.getLastRow()-1,11).getValues();
-  return rows.filter(function(r){
-    if (String(r[4]).toUpperCase() !== 'QUEUED') return false;
-    if (missionTag && String(r[10] || '').indexOf('mission_id='+missionTag) === -1) return false;
-    return true;
-  })
-    .sort(function(a,b){return Number(b[3]||0)-Number(a[3]||0);}).slice(0,max)
-    .map(function(r){return{queue_id:r[0],source_id:r[1],url:r[2],priority:r[3],status:r[4],queued_at:r[5],attempt_count:r[8],source:r[10]};});
 }
 
 function queueDiscoveredLinks_(item, result) {

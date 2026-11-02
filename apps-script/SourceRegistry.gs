@@ -1,12 +1,10 @@
-/* OCE Source Registry V2.2
+/* OCE Source Registry V2.1
  * LEGO block: discovered URLs -> persistent registry -> controlled queue.
  * Standalone Apps Script safe: the spreadsheet is created and remembered by ID.
- * Mission queues are scoped by mission provenance so a source already known to OCE
- * can participate in a new mission without being silently discarded as ALREADY_PRESENT.
  */
 
 const OCE_SOURCE_REGISTRY = {
-  VERSION: '2.2.0',
+  VERSION: '2.1.0',
   REGISTRY_SHEET: 'SOURCE_REGISTRY',
   QUEUE_SHEET: 'SOURCE_QUEUE',
   RUNS_SHEET: 'SCOUT_RUNS',
@@ -88,44 +86,7 @@ function enqueueRegisteredSource(sourceId,priority){
   return{queue_id:queueId,status:'QUEUED'};
 }
 
-/* Mission-scoped enqueue.
- * A canonical URL may already exist in the global registry or another mission.
- * That must not cause the current mission to lose its queue record. We keep the
- * registry deduplicated while allowing one persistent queue record per mission.
- */
-function registerAndQueueMissionSource(source,missionId){
-  const id=String(missionId||'').trim();
-  if(!id) return registerAndQueueSource(source);
-  if(!source||!source.url)throw Error('Source URL is required.');
-
-  const registered=registerDiscoveredSource(source);
-  const ss=getOceSpreadsheet_();
-  const registry=ss.getSheetByName(OCE_SOURCE_REGISTRY.REGISTRY_SHEET);
-  const queue=ss.getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
-  if(!registry||!queue)throw Error('Source Registry is not initialized.');
-  if(queue.getLastRow()-1>=OCE_SOURCE_REGISTRY.MAX_QUEUE)throw Error('Source queue capacity reached.');
-
-  const missionTag='mission_id='+id;
-  const rows=queue.getLastRow()<2?[]:queue.getRange(2,1,queue.getLastRow()-1,11).getValues();
-  const existing=rows.map(function(r,index){return{r:r,index:index};}).find(function(item){
-    return String(item.r[1]||'')===String(registered.source_id) && String(item.r[10]||'').indexOf(missionTag)!==-1;
-  });
-  if(existing)return{queue_id:existing.r[0],status:'ALREADY_PRESENT'};
-
-  const queueId=Utilities.getUuid();
-  const provenance=missionTag+'|'+String(source.provenance||'DISCOVERY_BRAIN');
-  queue.appendRow([queueId,registered.source_id,registered.canonical_url,Number(source.priority||registered.priority||0),'QUEUED',new Date(),'','',0,'',provenance]);
-  updateRegistryQueueStatus_(registry,registered.row,'QUEUED');
-  return{queue_id:queueId,status:'QUEUED'};
-}
-
-function registerAndQueueSource(source){
-  const provenance=String(source&&source.provenance||'');
-  const match=provenance.match(/(?:^|\|)mission_id=([^|]+)/);
-  if(match) return registerAndQueueMissionSource(source,match[1]);
-  const registered=registerDiscoveredSource(source);
-  return enqueueRegisteredSource(registered.source_id,source.priority);
-}
+function registerAndQueueSource(source){const registered=registerDiscoveredSource(source);return enqueueRegisteredSource(registered.source_id,source.priority);}
 
 function getSourceQueue(limit){
   const sheet=getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
