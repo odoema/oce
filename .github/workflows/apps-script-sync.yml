@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-      OCE_APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.OCE_APPS_SCRIPT_DEPLOYMENT_ID }}
+      OCE_APPS_SCRIPT_DEPLOYMENT_ID: AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO
       OCE_WEB_APP_URL: https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec
     steps:
       - name: Checkout
@@ -35,11 +35,6 @@ jobs:
           if [ -z "${CLASPRC_JSON:-}" ]; then
             echo "Missing GitHub Actions secret: CLASPRC_JSON"
             echo "Create it from the authenticated clasp .clasprc.json file."
-            exit 1
-          fi
-          if [ -z "${OCE_APPS_SCRIPT_DEPLOYMENT_ID:-}" ]; then
-            echo "Missing GitHub Actions secret: OCE_APPS_SCRIPT_DEPLOYMENT_ID"
-            echo "Set this to the existing OCE web-app deployment ID so the canonical /exec URL is preserved."
             exit 1
           fi
 
@@ -70,14 +65,14 @@ jobs:
           done
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('Manifest JSON: OK')"
 
-      - name: Verify target deployment exists
+      - name: Verify canonical deployment exists
         shell: bash
         run: |
           set -euo pipefail
           deployments="$(clasp list-deployments)"
           echo "$deployments"
           if ! grep -Fq "$OCE_APPS_SCRIPT_DEPLOYMENT_ID" <<< "$deployments"; then
-            echo "The configured OCE_APPS_SCRIPT_DEPLOYMENT_ID was not found in this Apps Script project."
+            echo "The canonical OCE deployment ID was not found in this Apps Script project."
             exit 1
           fi
 
