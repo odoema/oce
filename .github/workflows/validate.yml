@@ -25,6 +25,7 @@ jobs:
           test -f web/app.js
           test -f web/discovery-brain.js
           test -f web/scout.js
+          test -f web/mission-control.js
           test -f README.md
           test -f docs/security.md
 
@@ -33,6 +34,7 @@ jobs:
           node --check web/app.js
           node --check web/discovery-brain.js
           node --check web/scout.js
+          node --check web/mission-control.js
 
       - name: Check Apps Script syntax
         run: |
