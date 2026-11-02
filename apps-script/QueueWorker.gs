@@ -1,15 +1,13 @@
-/* OCE Queue Worker V1.1
+/* OCE Queue Worker V1
  * LEGO block: persistent SOURCE_QUEUE -> controlled collection -> results.
  * It orchestrates the existing UrlScraper V2.0.0 function scrapeUrl_().
  *
- * Mission control owns an active mission. When the browser supplies a mission ID,
- * that mission is processed explicitly. Background automation falls back to the
- * newest mission with queued work so unrelated global queue records cannot starve
- * an active mission.
+ * Mission control owns an active mission. When one exists, the worker processes
+ * that mission's QUEUED rows first so a global queue cannot starve a live mission.
  */
 
 const OCE_QUEUE_WORKER = {
-  VERSION: '1.1.0',
+  VERSION: '1.0.0',
   QUEUE_SHEET: 'SOURCE_QUEUE',
   REGISTRY_SHEET: 'SOURCE_REGISTRY',
   RESULTS_SHEET: 'SOURCE_RESULTS',
@@ -28,16 +26,13 @@ function setupQueueWorker() {
   return sheet.getName();
 }
 
-function runQueueWorker(limit, requestedMissionId) {
+function runQueueWorker(limit) {
   const lock = LockService.getScriptLock();
   lock.waitLock(OCE_QUEUE_WORKER.LOCK_WAIT_MS);
   try {
     setupQueueWorker();
     const max = Math.max(1, Math.min(OCE_QUEUE_WORKER.MAX_BATCH, Number(limit || 5)));
-    const requested = String(requestedMissionId || '').trim();
-    const missionId = requested && missionHasQueuedWork_(requested)
-      ? requested
-      : getPriorityMissionId_();
+    const missionId = getPriorityMissionId_();
     const queueItems = getSourceQueue(max, missionId);
     const summary = {version:OCE_QUEUE_WORKER.VERSION,requested:max,mission_id:missionId || '',processed:0,completed:0,failed:0,blocked:0,items:[]};
     queueItems.forEach(function(item) {
@@ -54,19 +49,7 @@ function runQueueWorker(limit, requestedMissionId) {
   }
 }
 
-function missionHasQueuedWork_(missionId) {
-  const id = String(missionId || '').trim();
-  if (!id) return false;
-  const ss = getOceSpreadsheet_();
-  const queue = ss.getSheetByName(OCE_QUEUE_WORKER.QUEUE_SHEET);
-  if (!queue || queue.getLastRow() < 2) return false;
-  const rows = queue.getRange(2,1,queue.getLastRow()-1,11).getValues();
-  return rows.some(function(r) {
-    return String(r[10] || '').indexOf('mission_id='+id) !== -1 && String(r[4] || '').toUpperCase() === 'QUEUED';
-  });
-}
-
-/* Select the newest mission that still has active QUEUED work.
+/* Select the newest mission that still has active QUEUED/SCRAPING work.
  * This keeps automated worker ticks focused on the operator's current mission
  * instead of consuming unrelated global queue records first.
  */

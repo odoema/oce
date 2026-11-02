@@ -4,10 +4,6 @@
  * The normal operator experience is topic-first. Seed URLs are an internal
  * implementation detail and may be supplied only through the advanced override.
  * Discovery never bypasses login, CAPTCHA, paywalls or access controls.
- *
- * Mission Control owns the persistent queue on the main OCE mission page. This
- * legacy local queue remains available as a standalone scout LEGO, but it must
- * never paint over Mission Control's persistent counters or table.
  */
 
 const SCOUT_STORAGE_KEY = 'oce_source_queue_v3';
@@ -121,10 +117,6 @@ function scoutShowPlan(plan) {
 }
 
 function scoutRenderQueue() {
-  // Mission Control is the authoritative persistent queue on this page. Do not
-  // let the legacy localStorage queue write 25/25/etc. over the real mission state.
-  if (scout$('missionExpand')) return;
-
   const queue = scoutLoadQueue();
   const body = scout$('scoutQueueRows');
   scout$('scoutQueueCount').textContent = String(queue.length);
