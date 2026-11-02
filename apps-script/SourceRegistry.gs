@@ -119,6 +119,14 @@ function registerAndQueueMissionSource(source,missionId){
   return{queue_id:queueId,status:'QUEUED'};
 }
 
+function registerAndQueueSource(source){
+  const provenance=String(source&&source.provenance||'');
+  const match=provenance.match(/(?:^|\|)mission_id=([^|]+)/);
+  if(match) return registerAndQueueMissionSource(source,match[1]);
+  const registered=registerDiscoveredSource(source);
+  return enqueueRegisteredSource(registered.source_id,source.priority);
+}
+
 function getSourceQueue(limit){
   const sheet=getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
   if(!sheet||sheet.getLastRow()<2)return[];
