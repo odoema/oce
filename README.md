@@ -1,57 +1,53 @@
 # OCE — Odoch Campaign Engine
 
-OCE is a consent-aware campaign operations engine built around Google Sheets and Google Apps Script.
+OCE is a consent-aware marketing intelligence and campaign operations platform built around modular LEGO blocks. Complexity stays inside the system; the operator experience stays simple.
 
 ## Current release
 
-**V1.3 — Controlled contact ingestion foundation**
+**V1.4 — Source Scout + controlled public-source collection**
 
-Included:
+### Working foundation
 
-- contact normalization and email validation;
-- Uganda phone normalization;
-- duplicate handling;
-- consent filtering and suppression support;
-- provenance/source fields;
-- controlled CSV and Google Sheets ingestion;
-- source registry and import-run audit trail;
-- segmentation and campaign queueing;
-- configurable batch size (default 250);
-- holiday/weekend controls;
-- Kampala timezone support;
-- pause/resume safety switch;
-- hourly scheduler framework;
-- dashboard and send log;
-- provider-neutral delivery boundary;
+- public URL collector with HTTP/HTTPS validation;
+- SSRF/private-network protections;
+- bounded redirects and response size;
+- public-page HTML, links, tables, metadata and JSON-LD extraction;
+- source intelligence and provenance;
+- contact indicators and normalized review candidates;
+- explicit `NO_CONSENT` default;
+- controlled contact ingestion and normalization;
+- duplicate handling and suppression support;
+- campaign queueing and delivery boundary;
 - DRY_RUN / TEST / PRODUCTION delivery modes;
-- idempotency key based on queue ID;
-- provider message ID and retry-attempt fields;
 - Resend integration boundary without storing provider credentials in GitHub or Sheets.
 
-### Important safety state
+### New Source Scout block
 
-Production sending is **not enabled**. The default delivery mode is **DRY_RUN** and the global `SEND_ENABLED` switch is `FALSE`. Newly ingested records default to `consent_status=NO`, so they cannot enter a campaign queue until valid consent is explicitly recorded.
+Source Scout discovers candidate URLs from public seed pages and places them into an organized browser queue.
 
-## V1.3 import workflow
+```text
+Seed URLs → Collector → Link Discovery → Normalize → Deduplicate → Score → Queue
+```
 
-1. Open the OCE Google Sheet.
-2. Extensions → Apps Script.
-3. Add `apps-script/Contact_Import.gs`.
-4. Run **Initialize / Repair Workbook** and then **Setup Import Engine**.
-5. Register an authorized source in `SOURCE_CONFIG`.
-6. Import an approved CSV with `importCsvText()` or an authorized Google Sheet with `importFromGoogleSheet()`.
-7. Review the `IMPORT` tab.
-8. Run **Normalize & Import Contacts**.
-9. Run **Validate Contacts**.
-10. Only contacts with valid email, explicit consent, active status, and no suppression can enter a campaign queue.
+The Scout currently:
 
-### About web scraping
+- accepts multiple public seed URLs;
+- discovers one link level;
+- removes duplicates and obvious static assets;
+- optionally keeps discovery on seed domains;
+- scores likely useful sources;
+- limits a run to 100 sources;
+- persists the queue locally in the browser;
+- exports the queue as JSON;
+- does not automatically scrape the queue or send campaigns.
 
-OCE does **not** perform unrestricted web scraping. The V1.3 ingestion layer deliberately uses controlled exports/API data/Google Sheets. A future public-source connector can be added only after the source is reviewed for authorization, terms, robots policy, privacy, and lawful marketing use. Private pages, login bypass, CAPTCHA bypass, credential harvesting, and indiscriminate personal-data collection are out of scope.
+See `docs/source-scout-v1.md`.
 
-## V1.2/V1.3 deployment
+## Safety state
 
-Do not place provider API keys in GitHub, campaign sheets, or contact exports. Configure the external delivery endpoint only after its authentication and unsubscribe/suppression handling are ready.
+Production sending remains **disabled**. The delivery mode is controlled independently from source discovery. Newly discovered contact candidates remain review-only and default to `NO_CONSENT`.
+
+Public visibility is not marketing consent. OCE does not bypass authentication, CAPTCHA, paywalls, access controls, or other restrictions.
 
 ## Repository structure
 
@@ -59,37 +55,45 @@ Do not place provider API keys in GitHub, campaign sheets, or contact exports. C
 oce/
 ├── apps-script/
 │   ├── Code.gs
-│   ├── Contact_Import.gs
 │   ├── DeliveryAdapter.gs
+│   ├── UrlScraper.gs
+│   ├── CollectorGateway.gs
 │   ├── V12_Migration.gs
 │   └── appsscript.json
-├── config/
-│   └── settings.example.json
 ├── docs/
 │   ├── architecture.md
 │   ├── database.md
 │   ├── deployment.md
 │   ├── provider-resend.md
 │   ├── security.md
-│   └── v1.2-rollout.md
+│   ├── v1.2-rollout.md
+│   └── source-scout-v1.md
+├── web/
+│   ├── index.html
+│   ├── app.js
+│   ├── scout.js
+│   └── styles.css
+├── config/
+│   └── settings.example.json
 ├── tests/
 │   └── README.md
-├── .github/workflows/validate.yml
-├── .gitignore
-└── README.md
+└── .github/workflows/
 ```
 
-## Data policy
+## Architecture rule
 
-Only authorized/consented contact data should be imported. Do not bypass access controls or collect private personal information. Do not commit live contact exports, credentials, API keys, service-account files, or secrets.
+> Build complex capabilities as independent LEGO blocks, but give the user the simplest possible experience.
+
+The stable URL scraper is treated as an ingestion foundation. New capabilities should wrap around it rather than repeatedly rewriting it.
 
 ## Roadmap
 
-1. Controlled contact ingestion — complete.
-2. Provider-neutral delivery boundary — complete.
-3. Controlled Resend delivery endpoint — next.
-4. Unsubscribe/bounce/complaint lifecycle processing.
-5. Campaign analytics and delivery metrics.
-6. Stronger holiday calendar management.
-7. Automated tests and CI validation.
-8. Optional reviewed public-source connectors.
+1. Stable public URL collection — complete.
+2. Source intelligence — complete.
+3. Contact intelligence — foundation complete.
+4. Source Scout V1 — complete.
+5. Durable Source Registry and persistent Scrape Queue.
+6. Search/directory/sitemap discovery adapters.
+7. Consent-aware contact import and review workflow.
+8. Campaign analytics and delivery lifecycle.
+9. National marketing intelligence dashboard.
