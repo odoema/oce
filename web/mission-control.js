@@ -209,9 +209,9 @@ async function startPersistentMission() {
     renderMission(mission);
     await loadMissionQueuePage(1);
 
-    // Kick the first controlled collection immediately. The scheduled worker
-    // remains responsible for continued processing and expansion.
-    fetch(missionApiUrl('run_worker', { limit: '1' }), { cache: 'no-store' }).catch(() => {});
+    // Kick the first controlled collection immediately for this mission.
+    // The scheduled worker remains responsible for continued global processing.
+    fetch(missionApiUrl('run_worker', { limit: '1', mission_id: oceMissionId }), { cache: 'no-store' }).catch(() => {});
 
     oceMissionTimer = setInterval(pollMission, OCE_MISSION_POLL_MS);
     setTimeout(pollMission, 900);
