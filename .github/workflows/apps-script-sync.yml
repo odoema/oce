@@ -77,19 +77,6 @@ jobs:
             exit 1
           fi
 
-      - name: Reconcile remote Apps Script manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/oce-manifest"
-          cp apps-script/appsscript.json "$RUNNER_TEMP/oce-manifest/local.json"
-          clasp pull --force
-          cp apps-script/appsscript.json "$RUNNER_TEMP/oce-manifest/remote.json"
-          git checkout -- apps-script
-          cp "$RUNNER_TEMP/oce-manifest/remote.json" apps-script/appsscript.json
-          echo "Using the canonical project's existing manifest as the sync baseline."
-          cat apps-script/appsscript.json
-
       - name: Show Apps Script files to be pushed
         run: clasp show-file-status --json
 
