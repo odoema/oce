@@ -54,10 +54,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          printf '%s' "$CLASPRC_JSON" > .clasprc.json
-          chmod 600 .clasprc.json
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+
+          export CLASPRC="$HOME/.clasprc.json"
 
           echo "clasp $(clasp --version)"
+          echo "Using clasp credentials: $CLASPRC"
           clasp show-authorized-user
 
       - name: Validate Apps Script source set
@@ -120,4 +123,4 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -f .clasprc.json
+          rm -f "$HOME/.clasprc.json"
