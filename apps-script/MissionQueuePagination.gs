@@ -13,6 +13,22 @@ function getOceMissionQueuePage(missionId, page, pageSize) {
   const id = String(missionId || '').trim();
   if (!id) throw Error('Mission ID is required.');
 
+  return getOceQueuePageInternal_(function(r) {
+    return String(r[10] || '').indexOf('mission_id=' + id) !== -1;
+  }, id, page, pageSize);
+}
+
+/**
+ * Returns an accurate page of the entire persistent queue.
+ * This is display-only and does not change queue creation or worker behaviour.
+ */
+function getOceGlobalQueuePage(page, pageSize) {
+  return getOceQueuePageInternal_(function() {
+    return true;
+  }, '', page, pageSize);
+}
+
+function getOceQueuePageInternal_(filterFn, missionId, page, pageSize) {
   const requestedPage = Math.max(1, Number(page || 1));
   const size = Math.max(1, Math.min(OCE_QUEUE_PAGE.MAX_SIZE, Number(pageSize || OCE_QUEUE_PAGE.DEFAULT_SIZE)));
   const queue = getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
@@ -20,7 +36,7 @@ function getOceMissionQueuePage(missionId, page, pageSize) {
   if (!queue || queue.getLastRow() < 2) {
     return {
       version: OCE_QUEUE_PAGE.VERSION,
-      mission_id: id,
+      mission_id: missionId,
       page: 1,
       page_size: size,
       total: 0,
@@ -32,9 +48,13 @@ function getOceMissionQueuePage(missionId, page, pageSize) {
   }
 
   const rows = queue.getRange(2, 1, queue.getLastRow() - 1, 11).getValues();
-  const filtered = rows.filter(function(r) {
-    return String(r[10] || '').indexOf('mission_id=' + id) !== -1;
-  }).sort(function(a, b) {
+  const filtered = rows.filter(filterFn).sort(function(a, b) {
+    const statusRank = function(value) {
+      const status = String(value || '').toUpperCase();
+      return status === 'SCRAPING' ? 0 : status === 'QUEUED' ? 1 : status === 'COMPLETED' ? 2 : status === 'FAILED' ? 3 : 4;
+    };
+    const statusDiff = statusRank(a[4]) - statusRank(b[4]);
+    if (statusDiff !== 0) return statusDiff;
     const priority = Number(b[3] || 0) - Number(a[3] || 0);
     if (priority !== 0) return priority;
     return new Date(a[5] || 0).getTime() - new Date(b[5] || 0).getTime();
@@ -62,7 +82,7 @@ function getOceMissionQueuePage(missionId, page, pageSize) {
 
   return {
     version: OCE_QUEUE_PAGE.VERSION,
-    mission_id: id,
+    mission_id: missionId,
     page: safePage,
     page_size: size,
     total: total,
