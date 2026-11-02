@@ -25,8 +25,6 @@ jobs:
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       OCE_APPS_SCRIPT_ID: 1__bAterCWQop83g_fgfmLi8ggBQwd6WzxI45veH_9Kk3rVBbSeHsG-qs
-      OCE_APPS_SCRIPT_DEPLOYMENT_ID: AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO
-      OCE_WEB_APP_URL: https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec
 
     steps:
       - name: Checkout
@@ -78,7 +76,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl -fsSL --retry 3 --retry-delay 2 --max-time 45 "${OCE_WEB_APP_URL}?action=health")"
+          if [ -z "${OCE_EFFECTIVE_WEB_APP_URL:-}" ]; then
+            echo "Sync did not return an OCE web-app URL."
+            exit 1
+          fi
+          echo "Verifying: ${OCE_EFFECTIVE_WEB_APP_URL}"
+          response="$(curl -fsSL --retry 3 --retry-delay 2 --max-time 45 "${OCE_EFFECTIVE_WEB_APP_URL}?action=health")"
           echo "$response"
           node -e '
             const x = JSON.parse(process.argv[1]);
