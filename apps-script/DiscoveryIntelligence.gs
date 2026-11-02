@@ -9,15 +9,9 @@ const OCE_DISCOVERY_INTELLIGENCE = {
   VERSION: '1.0.0',
   MAX_QUERIES: 12,
   MAX_CANDIDATES: 50,
-  SEARCH_TIMEOUT_MS: 10000,
   PROVIDER: 'BING_RSS'
 };
 
-/**
- * Turn a human objective into a deterministic discovery plan.
- * Example: "Hospitals in Uganda" -> several query formulations and
- * source-type hints. No URL is required from the user.
- */
 function buildDiscoveryPlan(objective) {
   const text = String(objective || '').trim();
   if (!text) throw Error('Discovery objective is required.');
@@ -39,11 +33,6 @@ function buildDiscoveryPlan(objective) {
   };
 }
 
-/**
- * Search the public Bing RSS endpoint for candidates.
- * This is an adapter, not the intelligence architecture itself.
- * Search failure returns an empty result so the crawler remains independent.
- */
 function discoverSearchCandidates(objective) {
   const plan = buildDiscoveryPlan(objective);
   const candidates = [];
@@ -84,16 +73,14 @@ function discoverSearchCandidates(objective) {
   };
 }
 
-/**
- * Explicit bridge to the existing queue. The intelligence layer never writes
- * to SOURCE_QUEUE directly; it uses the established registry/queue LEGO.
- */
 function queueDiscoveryCandidates(objective, maxCandidates) {
   const result = discoverSearchCandidates(objective);
-  const limit = Math.max(1, Math.min(
-    Number(maxCandidates || result.candidates.length),
-    result.candidates.length
-  ));
+  if (!result.candidates.length) {
+    return {ok:true, objective:result.objective, discovered:0, attempted:0, queued:0, results:[]};
+  }
+
+  const requested = Number(maxCandidates || result.candidates.length);
+  const limit = Math.max(1, Math.min(requested, result.candidates.length));
   const queued = [];
 
   for (let i = 0; i < limit; i++) {
@@ -141,8 +128,7 @@ function searchBingRss_(query) {
       method: 'get',
       muteHttpExceptions: true,
       followRedirects: true,
-      validateHttpsCertificates: true,
-      timeout: OCE_DISCOVERY_INTELLIGENCE.SEARCH_TIMEOUT_MS
+      validateHttpsCertificates: true
     });
     if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return [];
 
