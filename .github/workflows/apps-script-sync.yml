@@ -1,0 +1,89 @@
+name: Sync OCE Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps-script/**'
+      - '.clasp.json'
+      - '.claspignore'
+      - '.github/workflows/apps-script-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oce-apps-script-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      OCE_APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.OCE_APPS_SCRIPT_DEPLOYMENT_ID }}
+      OCE_WEB_APP_URL: https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required CI credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CLASPRC_JSON:-}" ]; then
+            echo "Missing GitHub Actions secret: CLASPRC_JSON"
+            echo "Create it from the authenticated clasp .clasprc.json file."
+            exit 1
+          fi
+          if [ -z "${OCE_APPS_SCRIPT_DEPLOYMENT_ID:-}" ]; then
+            echo "Missing GitHub Actions secret: OCE_APPS_SCRIPT_DEPLOYMENT_ID"
+            echo "Set this to the existing OCE web-app deployment ID so the canonical /exec URL is preserved."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install clasp
+        run: npm install --global @google/clasp@3.4.1
+
+      - name: Configure clasp credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$CLASPRC_JSON" > .clasprc.json
+          chmod 600 .clasprc.json
+          trap 'rm -f .clasprc.json' EXIT
+          echo "clasp $(clasp --version)"
+          clasp show-authorized-user
+
+      - name: Validate Apps Script source set
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in apps-script/*.gs; do
+            node --check < "$file"
+          done
+          node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('Manifest JSON: OK')"
+
+      - name: Show Apps Script files to be pushed
+        run: clasp show-file-status --json
+
+      - name: Push GitHub source to Apps Script
+        run: clasp push --force
+
+      - name: Redeploy existing OCE web app deployment
+        run: clasp update-deployment "$OCE_APPS_SCRIPT_DEPLOYMENT_ID"
+
+      - name: Verify canonical OCE gateway health
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL --retry 3 --retry-delay 2 --max-time 45 "${OCE_WEB_APP_URL}?action=health")"
+          echo "$response"
+          node -e 'const x=JSON.parse(process.argv[1]); if(!x.ok || x.service !== "OCE Collector Gateway") process.exit(1); console.log(`Gateway ${x.version}: ${x.status}`);' "$response"
