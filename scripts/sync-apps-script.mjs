@@ -14,12 +14,37 @@ if (!SCRIPT_ID) fail('OCE_APPS_SCRIPT_ID is required.');
 if (!DEPLOYMENT_ID) fail('OCE_APPS_SCRIPT_DEPLOYMENT_ID is required.');
 if (!CLASPRC_JSON) fail('CLASPRC_JSON is required.');
 
-let credentials;
-try { credentials = JSON.parse(CLASPRC_JSON); }
+let claspStore;
+try { claspStore = JSON.parse(CLASPRC_JSON); }
 catch (error) { fail(`CLASPRC_JSON is not valid JSON: ${error.message}`); }
-if (!credentials.client_id || !credentials.client_secret || !credentials.refresh_token) {
-  fail('CLASPRC_JSON must contain client_id, client_secret and refresh_token.');
+
+function getOAuthCredentials(store) {
+  const candidates = [];
+  const add = (value, settings = {}) => {
+    if (value && typeof value === 'object') candidates.push({ ...settings, ...value });
+  };
+
+  add(store);
+  add(store?.token, store?.oauth2ClientSettings || {});
+
+  if (store?.tokens && typeof store.tokens === 'object') {
+    Object.values(store.tokens).forEach((credential) => add(credential));
+  }
+
+  for (const candidate of candidates) {
+    const clientId = candidate.client_id || candidate.clientId;
+    const clientSecret = candidate.client_secret || candidate.clientSecret;
+    const refreshToken = candidate.refresh_token || candidate.refreshToken;
+    if (clientId && clientSecret && refreshToken) {
+      return { clientId, clientSecret, refreshToken };
+    }
+  }
+
+  fail('CLASPRC_JSON does not contain a usable clasp OAuth credential. Expected a V3 token entry or legacy token + oauth2ClientSettings.');
 }
+
+const oauth = getOAuthCredentials(claspStore);
+
 if (!fs.existsSync(SOURCE_DIR)) fail(`Apps Script source directory not found: ${SOURCE_DIR}`);
 
 function readSourceFiles() {
@@ -61,8 +86,8 @@ async function main() {
   console.log(`Prepared ${files.length} Apps Script files.`);
   console.log(`Source set: ${files.map((file) => `${file.name}:${file.type}`).join(', ')}`);
 
-  const auth = new google.auth.OAuth2(credentials.client_id, credentials.client_secret);
-  auth.setCredentials({ refresh_token: credentials.refresh_token });
+  const auth = new google.auth.OAuth2(oauth.clientId, oauth.clientSecret);
+  auth.setCredentials({ refresh_token: oauth.refreshToken });
   const script = google.script({ version: 'v1', auth });
 
   console.log(`Updating Apps Script project ${SCRIPT_ID} via projects.updateContent...`);
