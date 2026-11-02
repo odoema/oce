@@ -2,6 +2,9 @@
  * Simple objective -> ranked public discovery -> live persistent progress.
  * Fast mode selects the highest-ranked 300 sources first. Operators can explicitly
  * expand the mission in additional batches without losing deferred discoveries.
+ *
+ * Mission Control is the authoritative UI for the persistent Source Queue. The
+ * legacy browser-local scout queue must never overwrite these counters or rows.
  */
 
 const OCE_MISSION_POLL_MS = 2500;
@@ -12,6 +15,7 @@ let oceQueuePage = 1;
 let oceQueuePageSize = OCE_QUEUE_DEFAULT_PAGE_SIZE;
 let oceQueueTotalPages = 0;
 let oceQueueRequestSeq = 0;
+let oceMissionWorkerBusy = false;
 
 function missionApiUrl(action, params = {}) {
   const query = new URLSearchParams({ action, ...params });
@@ -52,6 +56,24 @@ function missionStatusText(status) {
     COMPLETED_WITH_ISSUES: 'Mission complete with issues',
     FAILED: 'Mission failed'
   }[status] || status || 'Working';
+}
+
+function renderMissionCounters(queue) {
+  const q = queue || {};
+  const persistent = Number(q.persistent_total || q.total || 0);
+  const active = Number(q.queued || 0) + Number(q.scraping || 0);
+  const completed = Number(q.completed || 0);
+  const failedBlocked = Number(q.failed || 0) + Number(q.blocked || 0);
+
+  const selected = scout$('scoutQueueCount');
+  const activeEl = scout$('scoutQueuedCount');
+  const done = scout$('scoutDoneCount');
+  const failed = scout$('scoutFailedCount');
+
+  if (selected) selected.textContent = String(persistent);
+  if (activeEl) activeEl.textContent = String(active);
+  if (done) done.textContent = String(completed);
+  if (failed) failed.textContent = String(failedBlocked);
 }
 
 function setQueuePaginationControls() {
@@ -150,6 +172,8 @@ function renderMission(mission) {
   const persistent = Number(q.persistent_total || total);
   const limit = Number(mission.active_limit || 300);
 
+  renderMissionCounters(q);
+
   let detail = `${processed} processed · ${active} active · top ${limit} selected`;
   if (deferred) detail += ` · ${deferred} waiting`;
   detail += ` · ${persistent} persistent sources`;
@@ -175,27 +199,48 @@ function renderMission(mission) {
   scoutSetStatus(`Mission ${missionStatusText(mission.status).toLowerCase()}: ${processed} processed, ${active} active, ${deferred} waiting.`);
 }
 
-async function runMissionWorker(limit = 5) {
-  if (!oceMissionId) return null;
-  const payload = await missionApi('run_worker', {
-    limit: String(Math.max(1, Math.min(10, limit))),
-    mission_id: oceMissionId
-  });
-  return payload.worker || null;
+async function runMissionWorker(limit = 1) {
+  if (!oceMissionId || oceMissionWorkerBusy) return null;
+
+  oceMissionWorkerBusy = true;
+  try {
+    const payload = await missionApi('run_worker', {
+      limit: String(Math.max(1, Math.min(10, limit))),
+      mission_id: oceMissionId
+    });
+    return payload.worker || null;
+  } finally {
+    oceMissionWorkerBusy = false;
+  }
 }
 
 async function pollMission() {
   if (!oceMissionId) return;
   try {
     const payload = await missionApi('mission_status', { mission_id: oceMissionId });
-    renderMission(payload.mission);
+    const mission = payload.mission;
+    renderMission(mission);
 
-    const terminal = ['COMPLETED', 'COMPLETED_WITH_ISSUES', 'FAILED'].includes(payload.mission.status) && Number(payload.mission.queue?.deferred || 0) === 0;
+    const active = Number(mission.queue?.queued || 0) + Number(mission.queue?.scraping || 0);
+    const terminal = ['COMPLETED', 'COMPLETED_WITH_ISSUES', 'FAILED'].includes(mission.status) && Number(mission.queue?.deferred || 0) === 0;
+
     if (terminal) {
       if (oceMissionTimer) clearInterval(oceMissionTimer);
       oceMissionTimer = null;
       scout$('scoutRun').disabled = false;
       scout$('scoutRun').textContent = 'Start New Mission';
+      return;
+    }
+
+    // Keep the worker LEGO alive while the mission page is open. The Apps Script
+    // trigger remains the background fallback; this heartbeat prevents a live
+    // browser mission from sitting QUEUED if the trigger is delayed or missing.
+    if (active > 0) {
+      try {
+        await runMissionWorker(1);
+      } catch (workerError) {
+        scoutSetStatus(`Mission worker error: ${String(workerError.message || workerError)}`);
+      }
     }
   } catch (error) {
     scoutSetStatus(`Mission tracking temporarily unavailable: ${String(error.message || error)}`);
@@ -214,11 +259,13 @@ async function startPersistentMission() {
   oceQueuePage = 1;
   oceQueueTotalPages = 0;
   oceQueueRequestSeq += 1;
+  oceMissionWorkerBusy = false;
 
   scout$('scoutRun').disabled = true;
   scout$('scoutRun').textContent = 'Starting…';
   scoutSetStatus('Mission Control is starting the OCE engine in FAST mode…');
   missionProgress(3, 'Starting mission', 'Selecting the highest-ranked public sources first. Fast mode targets 300 sources.');
+  renderMissionCounters({persistent_total:0,queued:0,scraping:0,completed:0,failed:0,blocked:0});
   renderPersistentQueue([], {page:1,page_size:oceQueuePageSize,total:0,total_pages:0});
 
   try {
