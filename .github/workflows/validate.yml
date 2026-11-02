@@ -17,6 +17,7 @@ jobs:
           test -f apps-script/Code.gs
           test -f apps-script/CollectorGateway.gs
           test -f apps-script/UrlScraper.gs
+          test -f apps-script/SourceRegistry.gs
           test -f apps-script/appsscript.json
           test -f web/index.html
           test -f web/app.js
@@ -28,6 +29,9 @@ jobs:
         run: |
           node --check web/app.js
           node --check web/scout.js
+
+      - name: Check source registry syntax
+        run: node --check apps-script/SourceRegistry.gs
 
       - name: Check for obvious secret filenames
         run: |
