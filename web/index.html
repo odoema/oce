@@ -12,7 +12,7 @@
     <div>
       <span class="eyebrow">ODOCH CAMPAIGN ENGINE</span>
       <h1>Public Source Collector</h1>
-      <p>Scan an authorized public webpage, inspect what was found, review it, then move approved records into OCE.</p>
+      <p>Scan an authorized public webpage, understand the source, review what was found, then move approved records into OCE.</p>
     </div>
     <div class="badge">INGESTION · SAFE MODE</div>
   </header>
@@ -41,6 +41,41 @@
       <div><strong>Title</strong><div id="title">—</div></div>
       <div><strong>Source</strong><div id="source">—</div></div>
     </div>
+
+    <section id="sourceIntelligence" class="intelligence hidden">
+      <div class="section-head compact">
+        <div>
+          <h2>Source intelligence</h2>
+          <p>Public source information identified during discovery.</p>
+        </div>
+        <span class="safe-label">REVIEW ONLY</span>
+      </div>
+
+      <div class="intel-grid">
+        <div><strong>Organization</strong><div id="organization">—</div></div>
+        <div><strong>Type</strong><div id="sourceType">—</div></div>
+        <div><strong>Website</strong><div id="website">—</div></div>
+        <div><strong>Address</strong><div id="address">—</div></div>
+      </div>
+
+      <div class="intel-row">
+        <div><strong>Email indicators</strong><div id="emailCount">0</div></div>
+        <div><strong>Phone indicators</strong><div id="phoneCount">0</div></div>
+        <div><strong>Contact pages</strong><div id="contactPageCount">0</div></div>
+        <div><strong>Consent</strong><div id="consentStatus">NO_CONSENT</div></div>
+      </div>
+
+      <h3>Structured data</h3>
+      <div id="structuredTypes" class="tags">None detected</div>
+
+      <h3>Contact pages</h3>
+      <div id="contactPages" class="links">No obvious contact pages detected.</div>
+
+      <div class="source-meta">
+        <span>Collected: <strong id="collectedAt">—</strong></span>
+        <span>Public visibility does not establish marketing consent.</span>
+      </div>
+    </section>
 
     <h3>Structured records</h3>
     <div class="table-wrap">
