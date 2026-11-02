@@ -4,9 +4,9 @@
  * Uses a simple GET request to the Apps Script collector to avoid JSON POST preflight.
  */
 const CONFIG = {
-  // Set to the deployed OCE Apps Script /exec URL before publishing the live scanner.
-  // Never put a collector secret/token in this file.
-  COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/REPLACE_WITH_DEPLOYED_OCE_EXEC_ID/exec'
+  // Deployed OCE Apps Script /exec endpoint.
+  // No collector secret/token is exposed in the browser.
+  COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmJWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec'
 };
 
 let latest = null;
