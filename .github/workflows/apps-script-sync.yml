@@ -24,7 +24,7 @@ jobs:
 
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-      OCE_APPS_SCRIPT_ID: 1__bAterCWQop83g_fgfml8ggBQwd6Wzxl45veH_9Kk3rVBbSeHsG-qs
+      OCE_APPS_SCRIPT_ID: 1__bAterCWQop83g_fgfmLi8ggBQwd6WzxI45veH_9Kk3rVBbSeHsG-qs
       OCE_APPS_SCRIPT_DEPLOYMENT_ID: AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO
       OCE_WEB_APP_URL: https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec
 
