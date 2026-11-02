@@ -1,4 +1,4 @@
 **/node_modules/**
 **/.git/**
 **/*.md
-apps-script/appsscript.json
+appsscript.json
