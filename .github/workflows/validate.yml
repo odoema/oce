@@ -18,6 +18,8 @@ jobs:
           test -f apps-script/CollectorGateway.gs
           test -f apps-script/UrlScraper.gs
           test -f apps-script/SourceRegistry.gs
+          test -f apps-script/QueueWorker.gs
+          test -f apps-script/MissionOrchestrator.gs
           test -f apps-script/appsscript.json
           test -f web/index.html
           test -f web/app.js
@@ -32,8 +34,13 @@ jobs:
           node --check web/discovery-brain.js
           node --check web/scout.js
 
-      - name: Check source registry syntax
-        run: node --check apps-script/SourceRegistry.gs
+      - name: Check Apps Script syntax
+        run: |
+          node --check apps-script/SourceRegistry.gs
+          node --check apps-script/QueueWorker.gs
+          node --check apps-script/MissionOrchestrator.gs
+          node --check apps-script/CollectorGateway.gs
+          node --check apps-script/UrlScraper.gs
 
       - name: Check for obvious secret filenames
         run: |
