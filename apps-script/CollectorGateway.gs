@@ -55,6 +55,14 @@ function doGet(e) {
       return gatewayJson_({ok:true,discovery:queueDiscoveryCandidates(discoveryObjective,candidateLimit)});
     }
 
+    if (action === 'intelligent_queue') {
+      var intelligentQueueObjective = String(params.objective || params.topic || '').trim();
+      if (!intelligentQueueObjective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
+      var intelligentQueueLimit = Math.max(1, Math.min(20, Number(params.limit || 10)));
+      var intelligentMissionId = String(params.mission_id || '').trim();
+      return gatewayJson_({ok:true,discovery:queueIntelligentDiscoveryCandidates(intelligentQueueObjective,intelligentQueueLimit,intelligentMissionId)});
+    }
+
     if (action === 'run_worker') {
       var limit = Number(params.limit || 5);
       limit = Math.max(1, Math.min(10, limit));
