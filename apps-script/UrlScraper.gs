@@ -4,7 +4,7 @@
 // Marketing consent is always handled separately by OCE.
 
 var OCE_SCRAPER = {
-  VERSION: '2.0.0',
+  VERSION: '2.0.1',
   MAX_BYTES: 750000,
   MAX_REDIRECTS: 3
 };
@@ -82,6 +82,12 @@ function validatePublicUrl_(url) {
 function resolveUrl_(target, base) {
   target = String(target || '').trim();
   if (!target) throw new Error('Empty redirect target');
+
+  // Preserve non-HTTP resource links as-is. These are useful evidence
+  // for contact intelligence and must not be converted into webpage URLs.
+  if (/^(mailto:|tel:)/i.test(target)) return target;
+  if (/^javascript:/i.test(target)) return target;
+
   if (/^https?:\/\//i.test(target)) return target;
 
   var baseParts = parseHttpUrl_(base);
