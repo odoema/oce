@@ -23,7 +23,7 @@
       <div>
         <span class="eyebrow">LEGO BLOCK · SOURCE SCOUT</span>
         <h2>Find & Queue Sources</h2>
-        <p>Give OCE one or more public seed pages. The Scout discovers labelled links, removes duplicates, scores likely useful sources, and places them into a reviewable queue.</p>
+        <p>Give OCE one or more public starting pages. Scout follows useful links, removes duplicates, scores likely sources, and builds a reviewable queue automatically.</p>
       </div>
       <span class="safe-label">DISCOVERY ONLY</span>
     </div>
@@ -32,7 +32,7 @@
     <input id="scoutTopic" type="text" placeholder="e.g. Ugandan hospitality businesses">
 
     <label for="scoutSeeds" class="scout-label">Seed URLs</label>
-    <textarea id="scoutSeeds" rows="4" placeholder="https://example.org/directory\nhttps://example.org/members"></textarea>
+    <textarea id="scoutSeeds" rows="4" placeholder="https://example.org/directory&#10;https://example.org/members"></textarea>
 
     <div class="scout-controls">
       <div>
@@ -43,7 +43,7 @@
       <button id="scoutRun">Find & Queue Sources</button>
     </div>
 
-    <p class="hint">V1 discovers one link level from each seed. It never bypasses login, CAPTCHA, paywalls or access controls, and it does not automatically scrape the discovered queue.</p>
+    <p class="hint">Scout can recover from a dead directory path by trying the public site root, then follows a small number of high-value pages for a second discovery level. It never bypasses login, CAPTCHA, paywalls or access controls, and it does not automatically scrape the discovered queue.</p>
     <div id="scoutStatus" class="status hidden"></div>
   </section>
 
