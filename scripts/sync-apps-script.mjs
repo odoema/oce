@@ -23,28 +23,19 @@ function getOAuthCredentials(store) {
   const add = (value, settings = {}) => {
     if (value && typeof value === 'object') candidates.push({ ...settings, ...value });
   };
-
   add(store);
   add(store?.token, store?.oauth2ClientSettings || {});
-
-  if (store?.tokens && typeof store.tokens === 'object') {
-    Object.values(store.tokens).forEach((credential) => add(credential));
-  }
-
+  if (store?.tokens && typeof store.tokens === 'object') Object.values(store.tokens).forEach((credential) => add(credential));
   for (const candidate of candidates) {
     const clientId = candidate.client_id || candidate.clientId;
     const clientSecret = candidate.client_secret || candidate.clientSecret;
     const refreshToken = candidate.refresh_token || candidate.refreshToken;
-    if (clientId && clientSecret && refreshToken) {
-      return { clientId, clientSecret, refreshToken };
-    }
+    if (clientId && clientSecret && refreshToken) return { clientId, clientSecret, refreshToken };
   }
-
   fail('CLASPRC_JSON does not contain a usable clasp OAuth credential. Expected a V3 token entry or legacy token + oauth2ClientSettings.');
 }
 
 const oauth = getOAuthCredentials(claspStore);
-
 if (!fs.existsSync(SOURCE_DIR)) fail(`Apps Script source directory not found: ${SOURCE_DIR}`);
 
 function readSourceFiles() {
@@ -57,7 +48,6 @@ function readSourceFiles() {
       if (b === 'appsscript.json') return -1;
       return a.localeCompare(b);
     });
-
   if (!entries.includes('appsscript.json')) fail('apps-script/appsscript.json is required.');
 
   const files = entries.map((filename) => {
@@ -68,17 +58,18 @@ function readSourceFiles() {
       return { name: 'appsscript', type: 'JSON', source };
     }
     const extension = path.extname(filename).toLowerCase();
-    return {
-      name: path.basename(filename, extension),
-      type: extension === '.html' ? 'HTML' : 'SERVER_JS',
-      source,
-    };
+    return { name: path.basename(filename, extension), type: extension === '.html' ? 'HTML' : 'SERVER_JS', source };
   });
-
   const names = files.map((file) => file.name);
   const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
   if (duplicates.length) fail(`Duplicate Apps Script file names: ${[...new Set(duplicates)].join(', ')}`);
   return files;
+}
+
+function apiErrorSummary(error) {
+  const data = error?.response?.data;
+  if (!data) return '';
+  try { return JSON.stringify(data); } catch (_) { return String(data); }
 }
 
 async function main() {
@@ -91,8 +82,13 @@ async function main() {
   const script = google.script({ version: 'v1', auth });
 
   console.log(`Updating Apps Script project ${SCRIPT_ID} via projects.updateContent...`);
-  const updated = await script.projects.updateContent({ scriptId: SCRIPT_ID, requestBody: { files } });
-  if (!updated.data || updated.data.scriptId !== SCRIPT_ID) fail('Apps Script updateContent returned an unexpected project response.');
+  try {
+    const updated = await script.projects.updateContent({ scriptId: SCRIPT_ID, requestBody: { files } });
+    if (!updated.data || updated.data.scriptId !== SCRIPT_ID) fail('Apps Script updateContent returned an unexpected project response.');
+  } catch (error) {
+    console.error(`Apps Script updateContent response: ${apiErrorSummary(error)}`);
+    throw error;
+  }
   console.log('Apps Script HEAD content updated successfully.');
 
   const version = await script.projects.versions.create({
