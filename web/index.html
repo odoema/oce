@@ -18,6 +18,63 @@
     <div class="badge">INGESTION · SAFE MODE</div>
   </header>
 
+  <section class="card scout-card">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">LEGO BLOCK · SOURCE SCOUT</span>
+        <h2>Find & Queue Sources</h2>
+        <p>Give OCE one or more public seed pages. The Scout discovers labelled links, removes duplicates, scores likely useful sources, and places them into a reviewable queue.</p>
+      </div>
+      <span class="safe-label">DISCOVERY ONLY</span>
+    </div>
+
+    <label for="scoutTopic">What are you looking for?</label>
+    <input id="scoutTopic" type="text" placeholder="e.g. Ugandan hospitality businesses">
+
+    <label for="scoutSeeds" class="scout-label">Seed URLs</label>
+    <textarea id="scoutSeeds" rows="4" placeholder="https://example.org/directory\nhttps://example.org/members"></textarea>
+
+    <div class="scout-controls">
+      <div>
+        <label for="scoutMax">Maximum new sources</label>
+        <input id="scoutMax" type="number" min="1" max="100" value="25">
+      </div>
+      <label class="check-row"><input id="scoutSameDomain" type="checkbox" checked> Keep discovery on the seed domain(s)</label>
+      <button id="scoutRun">Find & Queue Sources</button>
+    </div>
+
+    <p class="hint">V1 discovers one link level from each seed. It never bypasses login, CAPTCHA, paywalls or access controls, and it does not automatically scrape the discovered queue.</p>
+    <div id="scoutStatus" class="status hidden"></div>
+  </section>
+
+  <section class="card scout-queue-card">
+    <div class="section-head">
+      <div>
+        <h2>Source Queue</h2>
+        <p>Organized discovery results waiting for controlled collection.</p>
+      </div>
+      <div class="queue-actions">
+        <button id="scoutExport" class="secondary">Export Queue</button>
+        <button id="scoutClear" class="secondary">Clear Queue</button>
+      </div>
+    </div>
+
+    <div class="queue-stats">
+      <div><strong id="scoutQueueCount">0</strong><span>Total</span></div>
+      <div><strong id="scoutQueuedCount">0</strong><span>Queued</span></div>
+      <div><strong id="scoutDoneCount">0</strong><span>Completed</span></div>
+      <div><strong id="scoutFailedCount">0</strong><span>Failed/Blocked</span></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Priority</th><th>Source URL</th><th>Discovered from</th><th>Status</th><th>Discovered</th></tr></thead>
+        <tbody id="scoutQueueRows"></tbody>
+      </table>
+    </div>
+    <div class="notice">The queue is currently stored in this browser. Discovery does not grant marketing consent. Queueing a source does not automatically collect contacts or send messages.</div>
+  </section>
+
   <section class="card">
     <label for="url">Website URL</label>
     <div class="row">
@@ -112,5 +169,6 @@
   </section>
 </main>
 <script src="app.js"></script>
+<script src="scout.js"></script>
 </body>
 </html>
