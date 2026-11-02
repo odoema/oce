@@ -20,6 +20,14 @@ function doGet(e) {
       return gatewayJson_({ok:true,mission:getOceMissionStatus(missionId)});
     }
 
+    if (action === 'mission_queue_page') {
+      var queueMissionId = String(params.mission_id || '').trim();
+      if (!queueMissionId) return gatewayJson_({ok:false,error:'Mission ID is required.'});
+      var queuePage = Math.max(1, Number(params.page || 1));
+      var queuePageSize = Math.max(1, Math.min(100, Number(params.page_size || 25)));
+      return gatewayJson_({ok:true,queue:getOceMissionQueuePage(queueMissionId,queuePage,queuePageSize)});
+    }
+
     if (action === 'run_worker') {
       var limit = Number(params.limit || 5);
       limit = Math.max(1, Math.min(10, limit));
