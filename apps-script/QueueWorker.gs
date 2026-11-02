@@ -1,6 +1,9 @@
 /* OCE Queue Worker V1
  * LEGO block: persistent SOURCE_QUEUE -> controlled collection -> results.
  * It orchestrates the existing UrlScraper V2.0.0 function scrapeUrl_().
+ *
+ * Optional mission targeting is a routing improvement only. With no mission ID,
+ * the original global queue behaviour is preserved exactly.
  */
 
 const OCE_QUEUE_WORKER = {
@@ -22,14 +25,15 @@ function setupQueueWorker() {
   return sheet.getName();
 }
 
-function runQueueWorker(limit) {
+function runQueueWorker(limit, missionId) {
   const lock = LockService.getScriptLock();
   lock.waitLock(OCE_QUEUE_WORKER.LOCK_WAIT_MS);
   try {
     setupQueueWorker();
     const max = Math.max(1, Math.min(OCE_QUEUE_WORKER.MAX_BATCH, Number(limit || 5)));
-    const queueItems = getSourceQueue(max);
-    const summary = {version:OCE_QUEUE_WORKER.VERSION,requested:max,processed:0,completed:0,failed:0,blocked:0,items:[]};
+    const targetMission = String(missionId || '').trim();
+    const queueItems = getSourceQueue(max, targetMission);
+    const summary = {version:OCE_QUEUE_WORKER.VERSION,requested:max,mission_id:targetMission,processed:0,completed:0,failed:0,blocked:0,items:[]};
     queueItems.forEach(function(item) {
       const outcome = processQueueItem_(item);
       summary.processed += 1;
