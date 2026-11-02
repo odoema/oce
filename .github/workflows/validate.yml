@@ -20,6 +20,7 @@ jobs:
           test -f apps-script/SourceRegistry.gs
           test -f apps-script/QueueWorker.gs
           test -f apps-script/MissionOrchestrator.gs
+          test -f apps-script/ContactIntelligence.gs
           test -f apps-script/appsscript.json
           test -f web/index.html
           test -f web/app.js
@@ -38,7 +39,7 @@ jobs:
 
       - name: Check Apps Script syntax
         run: |
-          for file in apps-script/SourceRegistry.gs apps-script/QueueWorker.gs apps-script/MissionOrchestrator.gs apps-script/CollectorGateway.gs apps-script/UrlScraper.gs; do
+          for file in apps-script/SourceRegistry.gs apps-script/QueueWorker.gs apps-script/MissionOrchestrator.gs apps-script/CollectorGateway.gs apps-script/UrlScraper.gs apps-script/ContactIntelligence.gs; do
             node --check < "$file"
           done
 
