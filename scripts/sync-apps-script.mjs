@@ -4,14 +4,13 @@ import process from 'node:process';
 import { google } from 'googleapis';
 
 const SCRIPT_ID = process.env.OCE_APPS_SCRIPT_ID;
-const DEPLOYMENT_ID = process.env.OCE_APPS_SCRIPT_DEPLOYMENT_ID;
+const CONFIGURED_DEPLOYMENT_ID = process.env.OCE_APPS_SCRIPT_DEPLOYMENT_ID || '';
 const CLASPRC_JSON = process.env.CLASPRC_JSON;
 const COMMIT_SHA = process.env.GITHUB_SHA || 'unknown';
 const SOURCE_DIR = path.resolve('apps-script');
 
 function fail(message) { throw new Error(message); }
 if (!SCRIPT_ID) fail('OCE_APPS_SCRIPT_ID is required.');
-if (!DEPLOYMENT_ID) fail('OCE_APPS_SCRIPT_DEPLOYMENT_ID is required.');
 if (!CLASPRC_JSON) fail('CLASPRC_JSON is required.');
 
 let claspStore;
@@ -73,6 +72,90 @@ function apiErrorSummary(error) {
   try { return JSON.stringify(data); } catch (_) { return String(data); }
 }
 
+function deploymentUrl(deployment) {
+  const entryPoints = deployment?.entryPoints || [];
+  const web = entryPoints.find((entry) => entry.entryPointType === 'WEB_APP' && entry.webApp?.url);
+  return web?.webApp?.url || '';
+}
+
+function isWebDeployment(deployment) {
+  return Boolean(deploymentUrl(deployment));
+}
+
+async function listAllDeployments(script) {
+  const deployments = [];
+  let pageToken;
+  do {
+    const response = await script.projects.deployments.list({
+      scriptId: SCRIPT_ID,
+      pageSize: 50,
+      ...(pageToken ? { pageToken } : {}),
+    });
+    deployments.push(...(response.data?.deployments || []));
+    pageToken = response.data?.nextPageToken;
+  } while (pageToken);
+  return deployments;
+}
+
+async function getOrCreateWebDeployment(script, versionNumber) {
+  const deployments = await listAllDeployments(script);
+  console.log(`Found ${deployments.length} Apps Script deployment(s).`);
+
+  let selected = null;
+
+  if (CONFIGURED_DEPLOYMENT_ID) {
+    selected = deployments.find((item) => item.deploymentId === CONFIGURED_DEPLOYMENT_ID) || null;
+    if (selected) console.log(`Configured deployment ${CONFIGURED_DEPLOYMENT_ID} is valid.`);
+    else console.log(`Configured deployment ${CONFIGURED_DEPLOYMENT_ID} is not present; selecting a valid OCE deployment instead.`);
+  }
+
+  if (!selected) {
+    selected = deployments.find((item) => isWebDeployment(item) && /oce|collector gateway/i.test(item.deploymentConfig?.description || '')) || null;
+  }
+
+  if (!selected) {
+    selected = deployments.find((item) => isWebDeployment(item)) || null;
+  }
+
+  if (selected) {
+    const currentConfig = selected.deploymentConfig || {};
+    await script.projects.deployments.update({
+      scriptId: SCRIPT_ID,
+      deploymentId: selected.deploymentId,
+      requestBody: {
+        deploymentConfig: {
+          scriptId: SCRIPT_ID,
+          versionNumber,
+          manifestFileName: currentConfig.manifestFileName || 'appsscript',
+          description: currentConfig.description || 'OCE Collector Gateway',
+        },
+      },
+    });
+    const refreshed = await script.projects.deployments.get({
+      scriptId: SCRIPT_ID,
+      deploymentId: selected.deploymentId,
+    });
+    const url = deploymentUrl(refreshed.data);
+    if (!url) fail(`Deployment ${selected.deploymentId} updated but no web-app URL was returned.`);
+    return { id: selected.deploymentId, url, created: false };
+  }
+
+  console.log('No existing web deployment found; creating the OCE web deployment.');
+  const created = await script.projects.deployments.create({
+    scriptId: SCRIPT_ID,
+    requestBody: {
+      scriptId: SCRIPT_ID,
+      versionNumber,
+      manifestFileName: 'appsscript',
+      description: 'OCE Collector Gateway',
+    },
+  });
+  const createdUrl = deploymentUrl(created.data);
+  if (!created.data?.deploymentId) fail('Apps Script deployment creation did not return a deployment ID.');
+  if (!createdUrl) fail(`Created deployment ${created.data.deploymentId} but no web-app URL was returned. Check appsscript.json webapp settings.`);
+  return { id: created.data.deploymentId, url: createdUrl, created: true };
+}
+
 async function main() {
   const files = readSourceFiles();
   console.log(`Prepared ${files.length} Apps Script files.`);
@@ -82,10 +165,6 @@ async function main() {
   auth.setCredentials({ refresh_token: oauth.refreshToken });
   const script = google.script({ version: 'v1', auth });
 
-  // Google documents script.projects as the required scope for getContent,
-  // updateContent, version creation, and deployment management. The OCE
-  // project must therefore be authorized with script.projects; no Drive
-  // import/export scope is required for CI.
   console.log(`Updating Apps Script project ${SCRIPT_ID} through Apps Script API...`);
   try {
     const current = await script.projects.getContent({ scriptId: SCRIPT_ID });
@@ -111,24 +190,14 @@ async function main() {
   if (!versionNumber) fail('Apps Script version creation did not return a version number.');
   console.log(`Created Apps Script version ${versionNumber}.`);
 
-  const deployment = await script.projects.deployments.get({ scriptId: SCRIPT_ID, deploymentId: DEPLOYMENT_ID });
-  const currentConfig = deployment.data?.deploymentConfig;
-  if (!currentConfig) fail('Existing OCE deployment has no deploymentConfig.');
+  const deployment = await getOrCreateWebDeployment(script, versionNumber);
+  console.log(`${deployment.created ? 'Created' : 'Updated'} OCE web deployment ${deployment.id} at version ${versionNumber}.`);
+  console.log(`OCE web app URL: ${deployment.url}`);
 
-  await script.projects.deployments.update({
-    scriptId: SCRIPT_ID,
-    deploymentId: DEPLOYMENT_ID,
-    requestBody: {
-      deploymentConfig: {
-        scriptId: SCRIPT_ID,
-        versionNumber,
-        manifestFileName: currentConfig.manifestFileName || 'appsscript',
-        description: currentConfig.description || 'OCE Collector Gateway',
-      },
-    },
-  });
+  if (process.env.GITHUB_ENV) {
+    fs.appendFileSync(process.env.GITHUB_ENV, `OCE_EFFECTIVE_DEPLOYMENT_ID=${deployment.id}\nOCE_EFFECTIVE_WEB_APP_URL=${deployment.url}\n`);
+  }
 
-  console.log(`Updated existing deployment ${DEPLOYMENT_ID} to version ${versionNumber}.`);
   console.log('OCE Apps Script synchronization completed successfully.');
 }
 
