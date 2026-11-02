@@ -12,38 +12,56 @@
   <header>
     <div>
       <span class="eyebrow">ODOCH CAMPAIGN ENGINE</span>
-      <h1>Public Source Collector</h1>
-      <p>Scan an authorized public webpage, understand the source, review what was found, then move approved records into OCE.</p>
+      <h1>Marketing Intelligence Engine</h1>
+      <p>Tell OCE what you are looking for. The engine plans discovery, finds public sources, ranks them, queues them, and reports progress.</p>
     </div>
-    <div class="badge">INGESTION · SAFE MODE</div>
+    <div class="badge">AUTOMATIC DISCOVERY · SAFE MODE</div>
   </header>
 
   <section class="card scout-card">
     <div class="section-head">
       <div>
-        <span class="eyebrow">LEGO BLOCK · SOURCE SCOUT</span>
-        <h2>Find & Queue Sources</h2>
-        <p>Give OCE one or more public starting pages. Scout follows useful links, removes duplicates, scores likely sources, and builds a reviewable queue automatically.</p>
+        <span class="eyebrow">LEGO BLOCK · DISCOVERY ENGINE</span>
+        <h2>Start a Discovery Mission</h2>
+        <p>You should not need to know what a seed URL is. OCE generates its own starting sources from the mission topic, then expands discovery from the strongest public sources.</p>
       </div>
       <span class="safe-label">DISCOVERY ONLY</span>
     </div>
 
     <label for="scoutTopic">What are you looking for?</label>
-    <input id="scoutTopic" type="text" placeholder="e.g. Ugandan hospitality businesses">
-
-    <label for="scoutSeeds" class="scout-label">Seed URLs</label>
-    <textarea id="scoutSeeds" rows="4" placeholder="https://example.org/directory&#10;https://example.org/members"></textarea>
+    <input id="scoutTopic" type="text" placeholder="e.g. Auditor firms in Uganda" autocomplete="off">
 
     <div class="scout-controls">
       <div>
-        <label for="scoutMax">Maximum new sources</label>
+        <label for="scoutMax">Maximum sources</label>
         <input id="scoutMax" type="number" min="1" max="100" value="25">
       </div>
-      <label class="check-row"><input id="scoutSameDomain" type="checkbox" checked> Keep discovery on the seed domain(s)</label>
-      <button id="scoutRun">Find & Queue Sources</button>
+      <label class="check-row"><input id="scoutSameDomain" type="checkbox" checked> Stay within discovered source domains</label>
+      <button id="scoutRun">Start Discovery</button>
     </div>
 
-    <p class="hint">Scout can recover from a dead directory path by trying the public site root, then follows a small number of high-value pages for a second discovery level. It never bypasses login, CAPTCHA, paywalls or access controls, and it does not automatically scrape the discovered queue.</p>
+    <details class="advanced-discovery">
+      <summary>Advanced: provide starting URLs manually</summary>
+      <label for="scoutSeeds" class="scout-label">Starting URLs</label>
+      <textarea id="scoutSeeds" rows="3" placeholder="Optional — OCE normally generates these automatically"></textarea>
+      <p class="hint">Manual starting URLs are an advanced override. Normal missions should use only the topic.</p>
+    </details>
+
+    <div id="missionProgress" class="mission-progress hidden" aria-live="polite">
+      <div class="progress-head">
+        <strong id="missionStage">Preparing mission…</strong>
+        <strong id="missionPercent">0%</strong>
+      </div>
+      <div class="progress-track"><div id="missionProgressBar" class="progress-bar"></div></div>
+      <div id="missionDetail" class="progress-detail">Planning the best public discovery sources.</div>
+    </div>
+
+    <div id="discoveryPlan" class="discovery-plan hidden">
+      <strong>Discovery plan</strong>
+      <span id="discoveryPlanText">OCE is selecting public sources.</span>
+    </div>
+
+    <p class="hint">OCE only uses publicly accessible sources. It never bypasses login, CAPTCHA, paywalls or access controls. Discovery does not establish marketing consent.</p>
     <div id="scoutStatus" class="status hidden"></div>
   </section>
 
@@ -72,7 +90,7 @@
         <tbody id="scoutQueueRows"></tbody>
       </table>
     </div>
-    <div class="notice">The queue is currently stored in this browser. Discovery does not grant marketing consent. Queueing a source does not automatically collect contacts or send messages.</div>
+    <div class="notice">The browser queue is a temporary discovery view. Persistent registry and controlled collection are separate OCE blocks.</div>
   </section>
 
   <section class="card">
@@ -81,7 +99,7 @@
       <input id="url" type="url" placeholder="https://example.org/contact" autocomplete="url">
       <button id="scan">Scan</button>
     </div>
-    <p class="hint">Enter a public HTTP/HTTPS webpage. OCE handles the technical connection in the background. No endpoint or token is required here.</p>
+    <p class="hint">Manual single-page scanning remains available for inspection and diagnostics.</p>
   </section>
 
   <section id="status" class="status hidden"></section>
@@ -169,6 +187,7 @@
   </section>
 </main>
 <script src="app.js"></script>
+<script src="discovery-brain.js"></script>
 <script src="scout.js"></script>
 </body>
 </html>
