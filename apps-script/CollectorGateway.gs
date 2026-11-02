@@ -28,6 +28,12 @@ function doGet(e) {
       return gatewayJson_({ok:true,queue:getOceMissionQueuePage(queueMissionId,queuePage,queuePageSize)});
     }
 
+    if (action === 'queue_page') {
+      var globalQueuePage = Math.max(1, Number(params.page || 1));
+      var globalQueuePageSize = Math.max(1, Math.min(100, Number(params.page_size || 25)));
+      return gatewayJson_({ok:true,queue:getOceGlobalQueuePage(globalQueuePage,globalQueuePageSize)});
+    }
+
     if (action === 'discover') {
       var objective = String(params.objective || params.topic || '').trim();
       if (!objective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
