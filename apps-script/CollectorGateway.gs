@@ -1,4 +1,4 @@
-// OCE Collector Gateway V4.1
+// OCE Collector Gateway V4.2
 // Browser-facing gateway for public collection and mission control.
 // No collector token is ever sent to the browser.
 // Public/authorized pages only. No login, CAPTCHA, paywall or access-control bypass.
@@ -9,7 +9,7 @@ function doGet(e) {
     var action = String(params.action || '').trim().toLowerCase();
 
     if (action === 'health') {
-      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.1.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','queue_worker','automation_status','health']});
+      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.2.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','mission_queue_page','queue_worker','automation_status','health']});
     }
 
     if (action === 'start_mission') {
@@ -24,6 +24,14 @@ function doGet(e) {
       var missionId = String(params.mission_id || '').trim();
       if (!missionId) return gatewayJson_({ok:false,error:'Mission ID is required.'});
       return gatewayJson_({ok:true,mission:getOceMissionStatus(missionId)});
+    }
+
+    if (action === 'mission_queue_page') {
+      var queueMissionId = String(params.mission_id || '').trim();
+      if (!queueMissionId) return gatewayJson_({ok:false,error:'Mission ID is required.'});
+      var queuePage = Number(params.page || 1);
+      var queuePageSize = Number(params.page_size || 25);
+      return gatewayJson_({ok:true,queue:getOceMissionQueuePage(queueMissionId,queuePage,queuePageSize)});
     }
 
     if (action === 'expand_mission') {
@@ -55,6 +63,7 @@ function doGet(e) {
 
 function startOceMissionGateway(topic) { return startOceMission(topic); }
 function getOceMissionStatusGateway(missionId) { return getOceMissionStatus(missionId); }
+function getOceMissionQueuePageGateway(missionId,page,pageSize) { return getOceMissionQueuePage(missionId,page,pageSize); }
 function runOceMissionBatchGateway(limit) { return runOceMissionBatch(limit || 5); }
 function expandOceMissionGateway(missionId, additional) { return expandOceMission(missionId, additional || 300); }
 
@@ -75,19 +84,20 @@ function gatewayJson_(payload) {
 }
 
 function testCollectorGatewayHealth() {
-  return {ok:true,gateway:'READY',version:'4.1.0',automation:getAutomationStatus_()};
+  return {ok:true,gateway:'READY',version:'4.2.0',automation:getAutomationStatus_()};
 }
 
 function testCollectorGatewayMissionIntegration() {
   return {
     ok:true,
-    gateway_version:'4.1.0',
+    gateway_version:'4.2.0',
     start_mission_available:typeof startOceMission==='function',
     mission_status_available:typeof getOceMissionStatus==='function',
+    mission_queue_page_available:typeof getOceMissionQueuePage==='function',
     mission_expand_available:typeof expandOceMission==='function',
     worker_available:typeof runOceMissionBatch==='function',
     scraper_available:typeof scrapeUrl_==='function',
     automation_status_available:typeof getAutomationStatus_==='function',
-    ready:typeof startOceMission==='function' && typeof getOceMissionStatus==='function' && typeof expandOceMission==='function' && typeof runOceMissionBatch==='function' && typeof scrapeUrl_==='function'
+    ready:typeof startOceMission==='function' && typeof getOceMissionStatus==='function' && typeof getOceMissionQueuePage==='function' && typeof expandOceMission==='function' && typeof runOceMissionBatch==='function' && typeof scrapeUrl_==='function'
   };
 }
