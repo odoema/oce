@@ -32,7 +32,7 @@ function getOAuthCredentials(store) {
     const refreshToken = candidate.refresh_token || candidate.refreshToken;
     if (clientId && clientSecret && refreshToken) return { clientId, clientSecret, refreshToken };
   }
-  fail('CLASPRC_JSON does not contain a usable clasp OAuth credential. Expected a V3 token entry or legacy token + oauth2ClientSettings.');
+  fail('CLASPRC_JSON does not contain a usable clasp OAuth credential.');
 }
 
 const oauth = getOAuthCredentials(claspStore);
@@ -42,13 +42,14 @@ function readSourceFiles() {
   const entries = fs.readdirSync(SOURCE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
-    .filter((name) => name === 'appsscript.json' || /\.(gs|js|html)$/i.test(name))
-    .sort((a, b) => {
-      if (a === 'appsscript.json') return 1;
-      if (b === 'appsscript.json') return -1;
-      return a.localeCompare(b);
-    });
+    .filter((name) => name === 'appsscript.json' || /\.(gs|js|html)$/i.test(name));
   if (!entries.includes('appsscript.json')) fail('apps-script/appsscript.json is required.');
+
+  entries.sort((a, b) => {
+    if (a === 'appsscript.json') return -1;
+    if (b === 'appsscript.json') return 1;
+    return a.localeCompare(b);
+  });
 
   const files = entries.map((filename) => {
     const source = fs.readFileSync(path.join(SOURCE_DIR, filename), 'utf8');
