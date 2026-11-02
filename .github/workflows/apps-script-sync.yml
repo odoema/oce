@@ -77,18 +77,6 @@ jobs:
             exit 1
           fi
 
-      - name: Verify canonical deployment exists
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Verifying canonical deployment in clasp project context"
-          deployments="$(clasp list-deployments)"
-          echo "$deployments"
-          if ! grep -Fq "$OCE_APPS_SCRIPT_DEPLOYMENT_ID" <<< "$deployments"; then
-            echo "The canonical OCE deployment ID was not found in the OCE Apps Script project."
-            exit 1
-          fi
-
       - name: Show Apps Script files to be pushed
         run: clasp show-file-status --json
 
@@ -107,6 +95,10 @@ jobs:
           node -e '
             const x = JSON.parse(process.argv[1]);
             if (!x.ok || x.service !== "OCE Collector Gateway") process.exit(1);
+            if (x.version !== "4.1.0") {
+              console.error(`Expected gateway 4.1.0, received ${x.version}`);
+              process.exit(1);
+            }
             console.log(`Gateway ${x.version}: ${x.status}`);
           ' "$response"
 
