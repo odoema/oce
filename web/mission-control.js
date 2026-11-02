@@ -1,6 +1,7 @@
-/* OCE Mission Control V1
- * LEGO block: simple objective -> backend mission -> live persistent progress.
- * This replaces browser-only discovery as the normal operator path.
+/* OCE Mission Control V2
+ * Simple objective -> ranked public discovery -> live persistent progress.
+ * Fast mode selects the highest-ranked 300 sources first. Operators can explicitly
+ * expand the mission in additional batches without losing deferred discoveries.
  */
 
 const OCE_MISSION_POLL_MS = 2500;
@@ -40,7 +41,8 @@ function missionStatusText(status) {
   return {
     PLANNING: 'Planning',
     QUEUED: 'Discovery queued',
-    COLLECTING: 'Collecting public sources',
+    COLLECTING: 'Collecting top-ranked sources',
+    BATCH_READY: 'Fast batch ready',
     COMPLETED: 'Mission complete',
     COMPLETED_WITH_ISSUES: 'Mission complete with issues',
     FAILED: 'Mission failed'
@@ -76,10 +78,14 @@ function renderMission(mission) {
   const total = Number(q.total || 0);
   const processed = Number(q.completed || 0) + Number(q.failed || 0) + Number(q.blocked || 0);
   const active = Number(q.queued || 0) + Number(q.scraping || 0);
+  const deferred = Number(q.deferred || 0);
+  const persistent = Number(q.persistent_total || total);
+  const limit = Number(mission.active_limit || 300);
 
-  let detail = `${processed} processed · ${active} active · ${total} sources discovered`;
+  let detail = `${processed} processed · ${active} active · top ${limit} selected`;
+  if (deferred) detail += ` · ${deferred} waiting`;
+  detail += ` · ${persistent} persistent sources`;
   if (mission.status === 'COMPLETED_WITH_ISSUES') detail += ' · review failed/blocked sources';
-  if (mission.status === 'COMPLETED') detail += ' · all queued sources processed';
 
   missionProgress(mission.progress, missionStatusText(mission.status), detail);
   renderPersistentQueue(mission);
@@ -87,10 +93,18 @@ function renderMission(mission) {
   const plan = scout$('discoveryPlan');
   if (plan) {
     plan.classList.remove('hidden');
-    scout$('discoveryPlanText').textContent = `${mission.topic} · ${total} persistent source records · ${mission.phase}`;
+    scout$('discoveryPlanText').textContent = `${mission.topic} · Fast set: top ${limit} · ${deferred} waiting for expansion · batch ${mission.batch_number || 1}`;
   }
 
-  scoutSetStatus(`Mission ${missionStatusText(mission.status).toLowerCase()}: ${processed} processed, ${active} active, ${total} discovered.`);
+  const expand = scout$('missionExpand');
+  const batch = scout$('missionBatchSize');
+  if (expand) {
+    expand.disabled = !mission.mission_id || !deferred;
+    expand.textContent = deferred ? 'Run Next Batch' : 'No More Waiting Sources';
+  }
+  if (batch) batch.disabled = !mission.mission_id || !deferred;
+
+  scoutSetStatus(`Mission ${missionStatusText(mission.status).toLowerCase()}: ${processed} processed, ${active} active, ${deferred} waiting.`);
 }
 
 async function pollMission() {
@@ -99,7 +113,7 @@ async function pollMission() {
     const payload = await missionApi('mission_status', { mission_id: oceMissionId });
     renderMission(payload.mission);
 
-    const terminal = ['COMPLETED', 'COMPLETED_WITH_ISSUES', 'FAILED'].includes(payload.mission.status);
+    const terminal = ['COMPLETED', 'COMPLETED_WITH_ISSUES', 'FAILED'].includes(payload.mission.status) && Number(payload.mission.queue?.deferred || 0) === 0;
     if (terminal) {
       if (oceMissionTimer) clearInterval(oceMissionTimer);
       oceMissionTimer = null;
@@ -123,17 +137,15 @@ async function startPersistentMission() {
 
   scout$('scoutRun').disabled = true;
   scout$('scoutRun').textContent = 'Starting…';
-  scoutSetStatus('Mission Control is starting the OCE engine…');
-  missionProgress(3, 'Starting mission', 'Understanding the objective and selecting public discovery sources.');
+  scoutSetStatus('Mission Control is starting the OCE engine in FAST mode…');
+  missionProgress(3, 'Starting mission', 'Selecting the highest-ranked public sources first. Fast mode targets 300 sources.');
 
   try {
-    const payload = await missionApi('start_mission', { topic });
+    const payload = await missionApi('start_mission', { topic, active_limit: '300' });
     const mission = payload.mission;
     oceMissionId = mission.mission_id;
     renderMission(mission);
 
-    // Kick the first controlled collection immediately. The scheduled worker
-    // remains responsible for continued processing and expansion.
     fetch(missionApiUrl('run_worker', { limit: '1' }), { cache: 'no-store' }).catch(() => {});
 
     oceMissionTimer = setInterval(pollMission, OCE_MISSION_POLL_MS);
@@ -147,15 +159,39 @@ async function startPersistentMission() {
   }
 }
 
+async function expandCurrentMission() {
+  if (!oceMissionId) return scoutSetStatus('Start a mission before running another source batch.');
+  const batch = Math.max(1, Math.min(5000, Number(scout$('missionBatchSize').value || 300)));
+  const button = scout$('missionExpand');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Expanding…';
+  }
+  scoutSetStatus(`Activating the next ${batch} highest-ranked waiting sources…`);
+  try {
+    const payload = await missionApi('expand_mission', { mission_id: oceMissionId, additional: String(batch) });
+    renderMission(payload.result.mission);
+    scoutSetStatus(`Added the next ${payload.result.promoted || 0} sources to the active mission set.`);
+    fetch(missionApiUrl('run_worker', { limit: '1' }), { cache: 'no-store' }).catch(() => {});
+  } catch (error) {
+    scoutSetStatus(String(error.message || error));
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function initMissionControl() {
   const run = scout$('scoutRun');
   if (!run) return;
   run.onclick = startPersistentMission;
 
-  const notice = document.querySelector('.scout-queue-card .notice');
-  if (notice) notice.textContent = 'Persistent mission queue. Collection is controlled by the OCE Queue Worker; the browser only displays live status.';
+  const expand = scout$('missionExpand');
+  if (expand) expand.onclick = expandCurrentMission;
 
-  scout$('scoutClear').onclick = () => scoutSetStatus('Persistent queue is managed by OCE Mission Control and is not cleared from the browser.');
+  const notice = document.querySelector('.scout-queue-card .notice');
+  if (notice) notice.textContent = 'Fast mode processes the highest-ranked 300 sources first. Lower-ranked discoveries remain persistent and can be activated in additional batches.';
+
+  scout$('scoutClear').onclick = () => scoutSetStatus('Persistent queue is managed by OCE Mission Control. Lower-ranked sources are deferred, not deleted.');
   scout$('scoutExport').onclick = () => {
     if (!oceMissionId) return scoutSetStatus('Start a mission before exporting its persistent queue.');
     missionApi('mission_status', { mission_id: oceMissionId }).then(payload => {
