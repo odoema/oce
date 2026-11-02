@@ -13,19 +13,19 @@
     <div>
       <span class="eyebrow">ODOCH CAMPAIGN ENGINE</span>
       <h1>Marketing Intelligence Engine</h1>
-      <p>Tell OCE what you are looking for. The engine plans discovery, finds public sources, ranks them, queues them, and reports progress.</p>
+      <p>Tell OCE what you are looking for. Mission Control plans discovery, finds public sources, queues them, collects them, and reports live progress.</p>
     </div>
-    <div class="badge">AUTOMATIC DISCOVERY · SAFE MODE</div>
+    <div class="badge">AUTOMATIC MISSION · SAFE MODE</div>
   </header>
 
   <section class="card scout-card">
     <div class="section-head">
       <div>
-        <span class="eyebrow">LEGO BLOCK · DISCOVERY ENGINE</span>
+        <span class="eyebrow">LEGO BLOCK · MISSION CONTROL</span>
         <h2>Start a Discovery Mission</h2>
-        <p>You should not need to know what a seed URL is. OCE generates its own starting sources from the mission topic, then expands discovery from the strongest public sources.</p>
+        <p>You do not need to know what a seed URL is. Give OCE the objective and the engine generates its own public starting sources, builds a persistent queue, and keeps working in the background.</p>
       </div>
-      <span class="safe-label">DISCOVERY ONLY</span>
+      <span class="safe-label">DISCOVERY + COLLECTION</span>
     </div>
 
     <label for="scoutTopic">What are you looking for?</label>
@@ -33,18 +33,16 @@
 
     <div class="scout-controls">
       <div>
-        <label for="scoutMax">Maximum sources</label>
+        <label for="scoutMax">Maximum sources shown</label>
         <input id="scoutMax" type="number" min="1" max="100" value="25">
       </div>
-      <label class="check-row"><input id="scoutSameDomain" type="checkbox" checked> Stay within discovered source domains</label>
+      <label class="check-row"><input id="scoutSameDomain" type="checkbox" checked> Keep browser discovery on source domains</label>
       <button id="scoutRun">Start Discovery</button>
     </div>
 
     <details class="advanced-discovery">
-      <summary>Advanced: provide starting URLs manually</summary>
-      <label for="scoutSeeds" class="scout-label">Starting URLs</label>
-      <textarea id="scoutSeeds" rows="3" placeholder="Optional — OCE normally generates these automatically"></textarea>
-      <p class="hint">Manual starting URLs are an advanced override. Normal missions should use only the topic.</p>
+      <summary>Advanced discovery controls</summary>
+      <p class="hint">Normal missions are fully automatic. Manual seed URLs remain visible here for diagnostics and future expert workflows; Mission Control does not require them.</p>
     </details>
 
     <div id="missionProgress" class="mission-progress hidden" aria-live="polite">
@@ -53,11 +51,11 @@
         <strong id="missionPercent">0%</strong>
       </div>
       <div class="progress-track"><div id="missionProgressBar" class="progress-bar"></div></div>
-      <div id="missionDetail" class="progress-detail">Planning the best public discovery sources.</div>
+      <div id="missionDetail" class="progress-detail">Understanding the objective and selecting public discovery sources.</div>
     </div>
 
     <div id="discoveryPlan" class="discovery-plan hidden">
-      <strong>Discovery plan</strong>
+      <strong>Mission Control</strong>
       <span id="discoveryPlanText">OCE is selecting public sources.</span>
     </div>
 
@@ -69,28 +67,28 @@
     <div class="section-head">
       <div>
         <h2>Source Queue</h2>
-        <p>Organized discovery results waiting for controlled collection.</p>
+        <p>Persistent mission sources being collected and tracked by the OCE backend.</p>
       </div>
       <div class="queue-actions">
-        <button id="scoutExport" class="secondary">Export Queue</button>
-        <button id="scoutClear" class="secondary">Clear Queue</button>
+        <button id="scoutExport" class="secondary">Export Mission</button>
+        <button id="scoutClear" class="secondary">Queue Control</button>
       </div>
     </div>
 
     <div class="queue-stats">
       <div><strong id="scoutQueueCount">0</strong><span>Total</span></div>
-      <div><strong id="scoutQueuedCount">0</strong><span>Queued</span></div>
+      <div><strong id="scoutQueuedCount">0</strong><span>Active</span></div>
       <div><strong id="scoutDoneCount">0</strong><span>Completed</span></div>
       <div><strong id="scoutFailedCount">0</strong><span>Failed/Blocked</span></div>
     </div>
 
     <div class="table-wrap">
       <table>
-        <thead><tr><th>#</th><th>Priority</th><th>Source URL</th><th>Discovered from</th><th>Status</th><th>Discovered</th></tr></thead>
+        <thead><tr><th>#</th><th>Priority</th><th>Source URL</th><th>Mission provenance</th><th>Status</th><th>Queued</th></tr></thead>
         <tbody id="scoutQueueRows"></tbody>
       </table>
     </div>
-    <div class="notice">The browser queue is a temporary discovery view. Persistent registry and controlled collection are separate OCE blocks.</div>
+    <div class="notice">Persistent queue is managed by the OCE Queue Worker. The browser displays live mission state; it does not own the collection queue.</div>
   </section>
 
   <section class="card">
@@ -189,5 +187,6 @@
 <script src="app.js"></script>
 <script src="discovery-brain.js"></script>
 <script src="scout.js"></script>
+<script src="mission-control.js"></script>
 </body>
 </html>
