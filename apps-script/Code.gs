@@ -80,3 +80,5 @@ function clean_(v){return String(v||'').trim().replace(/\s+/g,' ')}
 function withinWindow_(s){const h=Number(Utilities.formatDate(new Date(),s.TIMEZONE||OCE.TIMEZONE,'H'));return h>=Number(s.SEND_HOUR_START||9)&&h<Number(s.SEND_HOUR_END||17)}
 function blockedToday_(s){const tz=s.TIMEZONE||OCE.TIMEZONE,d=Number(Utilities.formatDate(new Date(),tz,'u'));if(s.BLOCK_WEEKENDS==='TRUE'&&(d===6||d===7))return true;if(s.BLOCK_HOLIDAYS!=='TRUE')return false;const today=Utilities.formatDate(new Date(),tz,'yyyy-MM-dd'),h=ssheet_(OCE.SHEETS.HOLIDAYS);return h&&h.getLastRow()>1&&h.getRange(2,1,h.getLastRow()-1,5).getValues().some(r=>String(r[0]).slice(0,10)===today&&String(r[4]).toUpperCase()==='NO')}
 function ssheet_(name){const s=SpreadsheetApp.getActive().getSheetByName(name);if(!s)throw Error('Missing sheet: '+name);return s}
+
+// Rollback deployment marker: preserve the last known stable Mission Control baseline.
