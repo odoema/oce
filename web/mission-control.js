@@ -158,6 +158,21 @@ async function runMissionWorker(limit = 1) {
   } finally { oceMissionWorkerBusy = false; }
 }
 
+function launchMissionDiscoveryInBackground() {
+  if (!oceMissionId) return;
+  scoutSetStatus('Mission started. Public web discovery is running in the background while collection begins.');
+  missionProgress(8, 'Discovering public sources', 'Searching the public web for objective-specific directories, registers, institutions and organizations.');
+  missionApi('run_discovery', { mission_id: oceMissionId })
+    .then(payload => {
+      const d = payload.discovery || {};
+      scoutSetStatus(`Web discovery completed: ${Number(d.seeded || 0)} new public sources added from ${Number(d.candidates || 0)} candidates.`);
+      pollMission();
+    })
+    .catch(error => {
+      scoutSetStatus(`Web discovery is still being handled by the engine: ${String(error.message || error)}`);
+    });
+}
+
 async function pollMission() {
   if (!oceMissionId) return;
   try {
@@ -188,7 +203,7 @@ async function startPersistentMission() {
   oceMissionTimer = null; oceMissionId = ''; oceQueuePage = 1; oceQueueTotalPages = 0; oceQueueRequestSeq += 1; oceMissionWorkerBusy = false;
   scout$('scoutRun').disabled = true; scout$('scoutRun').textContent = 'Starting…';
   scoutSetStatus('Mission Control is starting the OCE engine in FAST mode…');
-  missionProgress(3, 'Starting mission', 'Building public seed sources. The active capacity is 300 and the crawler will grow the queue from discovered links.');
+  missionProgress(3, 'Starting mission', 'Creating the mission and initial public seed queue.');
   renderMissionCounters({persistent_total:0,queued:0,scraping:0,completed:0,failed:0,blocked:0});
   renderPersistentQueue([], {page:1,page_size:oceQueuePageSize,total:0,total_pages:0});
   try {
@@ -196,11 +211,16 @@ async function startPersistentMission() {
     const mission = payload.mission;
     oceMissionId = mission.mission_id;
     renderMission(mission);
-    scoutSetStatus('Mission started. Expanding the discovery frontier…');
-    try {
-      const worker = await runMissionWorker(10);
-      if (worker && worker.processed === 0 && worker.mission_id) scoutSetStatus('Mission worker ran but found no queued records for this mission.');
-    } catch (workerError) { scoutSetStatus(`Mission worker error: ${String(workerError.message || workerError)}`); }
+    scoutSetStatus('Mission created. Discovery and collection are now running asynchronously.');
+
+    // Do not block Mission Control on the slow web-search phase.
+    launchMissionDiscoveryInBackground();
+
+    // Start collection immediately from the initial mission seed queue.
+    runMissionWorker(5).catch(workerError => {
+      scoutSetStatus(`Initial worker is continuing in the background: ${String(workerError.message || workerError)}`);
+    });
+
     await pollMission();
     oceMissionTimer = setInterval(pollMission, OCE_MISSION_POLL_MS);
     scout$('scoutRun').textContent = 'Mission Running…';
