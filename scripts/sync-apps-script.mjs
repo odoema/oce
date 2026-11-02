@@ -4,7 +4,6 @@ import process from 'node:process';
 import { google } from 'googleapis';
 
 const SCRIPT_ID = process.env.OCE_APPS_SCRIPT_ID;
-const CONFIGURED_DEPLOYMENT_ID = process.env.OCE_APPS_SCRIPT_DEPLOYMENT_ID || '';
 const CLASPRC_JSON = process.env.CLASPRC_JSON;
 const COMMIT_SHA = process.env.GITHUB_SHA || 'unknown';
 const SOURCE_DIR = path.resolve('apps-script');
@@ -78,82 +77,24 @@ function deploymentUrl(deployment) {
   return web?.webApp?.url || '';
 }
 
-function isWebDeployment(deployment) {
-  return Boolean(deploymentUrl(deployment));
-}
-
-async function listAllDeployments(script) {
-  const deployments = [];
-  let pageToken;
-  do {
-    const response = await script.projects.deployments.list({
-      scriptId: SCRIPT_ID,
-      pageSize: 50,
-      ...(pageToken ? { pageToken } : {}),
-    });
-    deployments.push(...(response.data?.deployments || []));
-    pageToken = response.data?.nextPageToken;
-  } while (pageToken);
-  return deployments;
-}
-
-async function getOrCreateWebDeployment(script, versionNumber) {
-  const deployments = await listAllDeployments(script);
-  console.log(`Found ${deployments.length} Apps Script deployment(s).`);
-
-  let selected = null;
-
-  if (CONFIGURED_DEPLOYMENT_ID) {
-    selected = deployments.find((item) => item.deploymentId === CONFIGURED_DEPLOYMENT_ID) || null;
-    if (selected) console.log(`Configured deployment ${CONFIGURED_DEPLOYMENT_ID} is valid.`);
-    else console.log(`Configured deployment ${CONFIGURED_DEPLOYMENT_ID} is not present; selecting a valid OCE deployment instead.`);
-  }
-
-  if (!selected) {
-    selected = deployments.find((item) => isWebDeployment(item) && /oce|collector gateway/i.test(item.deploymentConfig?.description || '')) || null;
-  }
-
-  if (!selected) {
-    selected = deployments.find((item) => isWebDeployment(item)) || null;
-  }
-
-  if (selected) {
-    const currentConfig = selected.deploymentConfig || {};
-    await script.projects.deployments.update({
-      scriptId: SCRIPT_ID,
-      deploymentId: selected.deploymentId,
-      requestBody: {
-        deploymentConfig: {
-          scriptId: SCRIPT_ID,
-          versionNumber,
-          manifestFileName: currentConfig.manifestFileName || 'appsscript',
-          description: currentConfig.description || 'OCE Collector Gateway',
-        },
-      },
-    });
-    const refreshed = await script.projects.deployments.get({
-      scriptId: SCRIPT_ID,
-      deploymentId: selected.deploymentId,
-    });
-    const url = deploymentUrl(refreshed.data);
-    if (!url) fail(`Deployment ${selected.deploymentId} updated but no web-app URL was returned.`);
-    return { id: selected.deploymentId, url, created: false };
-  }
-
-  console.log('No existing web deployment found; creating the OCE web deployment.');
+async function createWebDeployment(script, versionNumber) {
+  console.log(`Creating writable OCE web deployment for Apps Script version ${versionNumber}...`);
   const created = await script.projects.deployments.create({
     scriptId: SCRIPT_ID,
     requestBody: {
       scriptId: SCRIPT_ID,
       versionNumber,
       manifestFileName: 'appsscript',
-      description: 'OCE Collector Gateway',
+      description: `OCE Collector Gateway — GitHub ${COMMIT_SHA.slice(0, 12)}`,
     },
   });
-  const createdUrl = deploymentUrl(created.data);
-  if (!created.data?.deploymentId) fail('Apps Script deployment creation did not return a deployment ID.');
-  if (!createdUrl) fail(`Created deployment ${created.data.deploymentId} but no web-app URL was returned. Check appsscript.json webapp settings.`);
-  return { id: created.data.deploymentId, url: createdUrl, created: true };
+
+  const deploymentId = created.data?.deploymentId;
+  const url = deploymentUrl(created.data);
+  if (!deploymentId) fail('Apps Script deployment creation did not return a deployment ID.');
+  if (!url) fail(`Created deployment ${deploymentId} but no web-app URL was returned. Check appsscript.json webapp settings.`);
+
+  return { id: deploymentId, url };
 }
 
 async function main() {
@@ -190,8 +131,8 @@ async function main() {
   if (!versionNumber) fail('Apps Script version creation did not return a version number.');
   console.log(`Created Apps Script version ${versionNumber}.`);
 
-  const deployment = await getOrCreateWebDeployment(script, versionNumber);
-  console.log(`${deployment.created ? 'Created' : 'Updated'} OCE web deployment ${deployment.id} at version ${versionNumber}.`);
+  const deployment = await createWebDeployment(script, versionNumber);
+  console.log(`Created OCE web deployment ${deployment.id} at version ${versionNumber}.`);
   console.log(`OCE web app URL: ${deployment.url}`);
 
   if (process.env.GITHUB_ENV) {
