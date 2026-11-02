@@ -41,7 +41,7 @@ function missionProgress(percent, stage, detail) {
 
 function missionStatusText(status) {
   return {
-    PLANNING: 'Planning', QUEUED: 'Discovery queued', COLLECTING: 'Collecting public sources',
+    PLANNING: 'Planning', DISCOVERY_PENDING: 'Discovering public sources', QUEUED: 'Discovery queued', COLLECTING: 'Collecting public sources',
     BATCH_READY: 'Fast batch ready', COMPLETED: 'Mission complete',
     COMPLETED_WITH_ISSUES: 'Mission complete with issues', FAILED: 'Mission failed'
   }[status] || status || 'Working';
@@ -166,6 +166,7 @@ function launchMissionDiscoveryInBackground() {
     .then(payload => {
       const d = payload.discovery || {};
       scoutSetStatus(`Web discovery completed: ${Number(d.seeded || 0)} new public sources added from ${Number(d.candidates || 0)} candidates.`);
+      runMissionWorker(5).catch(workerError => scoutSetStatus(`Worker continuing in background: ${String(workerError.message || workerError)}`));
       pollMission();
     })
     .catch(error => {
@@ -189,8 +190,7 @@ async function pollMission() {
       return;
     }
     if (active > 0) {
-      try { await runMissionWorker(5); }
-      catch (workerError) { scoutSetStatus(`Mission worker error: ${String(workerError.message || workerError)}`); }
+      runMissionWorker(5).catch(workerError => scoutSetStatus(`Mission worker error: ${String(workerError.message || workerError)}`));
     }
   } catch (error) { scoutSetStatus(`Mission tracking temporarily unavailable: ${String(error.message || error)}`); }
 }
@@ -203,27 +203,20 @@ async function startPersistentMission() {
   oceMissionTimer = null; oceMissionId = ''; oceQueuePage = 1; oceQueueTotalPages = 0; oceQueueRequestSeq += 1; oceMissionWorkerBusy = false;
   scout$('scoutRun').disabled = true; scout$('scoutRun').textContent = 'Starting…';
   scoutSetStatus('Mission Control is starting the OCE engine in FAST mode…');
-  missionProgress(3, 'Starting mission', 'Creating the mission and initial public seed queue.');
+  missionProgress(3, 'Starting mission', 'Creating the mission and preparing objective-driven discovery.');
   renderMissionCounters({persistent_total:0,queued:0,scraping:0,completed:0,failed:0,blocked:0});
   renderPersistentQueue([], {page:1,page_size:oceQueuePageSize,total:0,total_pages:0});
   try {
     const payload = await missionApi('start_mission', { topic, active_limit: '300', discovery_limit: '100' });
     const mission = payload.mission;
     oceMissionId = mission.mission_id;
-    renderMission(mission);
-    scoutSetStatus('Mission created. Discovery and collection are now running asynchronously.');
-
-    // Do not block Mission Control on the slow web-search phase.
-    launchMissionDiscoveryInBackground();
-
-    // Start collection immediately from the initial mission seed queue.
-    runMissionWorker(5).catch(workerError => {
-      scoutSetStatus(`Initial worker is continuing in the background: ${String(workerError.message || workerError)}`);
-    });
-
-    await pollMission();
-    oceMissionTimer = setInterval(pollMission, OCE_MISSION_POLL_MS);
     scout$('scoutRun').textContent = 'Mission Running…';
+    scoutSetStatus('Mission created. Discovery and collection are now running asynchronously.');
+    renderMission(mission);
+    launchMissionDiscoveryInBackground();
+    oceMissionTimer = setInterval(pollMission, OCE_MISSION_POLL_MS);
+    runMissionWorker(5).catch(workerError => scoutSetStatus(`Worker continuing in background: ${String(workerError.message || workerError)}`));
+    await pollMission();
   } catch (error) {
     scout$('scoutRun').disabled = false; scout$('scoutRun').textContent = 'Start Discovery';
     missionProgress(0, 'Mission could not start', String(error.message || error));
@@ -259,7 +252,7 @@ function initMissionControl() {
   if (next) next.onclick = () => { if (oceQueuePage < oceQueueTotalPages) { oceQueuePage += 1; loadMissionQueuePage(oceQueuePage); } };
   if (pageSize) pageSize.onchange = () => { oceQueuePageSize = Math.max(1, Math.min(100, Number(pageSize.value || 25))); oceQueuePage = 1; loadMissionQueuePage(1); };
   const notice = document.querySelector('.scout-queue-card .notice');
-  if (notice) notice.textContent = 'Fast mode has an active capacity of 300. OCE starts from ranked public seeds, then grows the persistent mission queue from links discovered during collection. Use pagination to browse the complete mission source queue.';
+  if (notice) notice.textContent = 'Fast mode has an active capacity of 300. OCE starts from objective-driven public discovery, then grows the persistent mission queue from links discovered during collection. Use pagination to browse the complete mission source queue.';
   scout$('scoutClear').onclick = () => scoutSetStatus('Persistent queue is managed by OCE Mission Control. Lower-ranked sources are deferred, not deleted.');
   scout$('scoutExport').onclick = () => {
     if (!oceMissionId) return scoutSetStatus('Start a mission before exporting its persistent queue.');
