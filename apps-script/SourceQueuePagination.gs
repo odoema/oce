@@ -18,19 +18,29 @@ function getOceMissionQueuePage(missionId, page, pageSize) {
   p = Math.max(1, Math.floor(isFinite(p) ? p : 1));
   size = Math.max(1, Math.min(OCE_QUEUE_PAGINATION.MAX_PAGE_SIZE, Math.floor(isFinite(size) ? size : OCE_QUEUE_PAGINATION.DEFAULT_PAGE_SIZE)));
 
-  const queue = getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
+  const ss = getOceSpreadsheet_();
+  const queue = ss.getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
   if (!queue || queue.getLastRow() < 2) {
     return {page:1,page_size:size,total:0,total_pages:0,items:[]};
+  }
+
+  const registry = ss.getSheetByName(OCE_SOURCE_REGISTRY.REGISTRY_SHEET);
+  const registryUrls = {};
+  if (registry && registry.getLastRow() >= 2) {
+    registry.getRange(2,1,registry.getLastRow()-1,16).getValues().forEach(function(r){
+      registryUrls[String(r[0] || '')] = String(r[2] || r[1] || '');
+    });
   }
 
   const rows = queue.getRange(2,1,queue.getLastRow()-1,11).getValues();
   const items = rows.filter(function(r) {
     return String(r[10] || '').indexOf('mission_id='+id) !== -1;
   }).map(function(r) {
+    const url = String(r[2] || '').trim() || registryUrls[String(r[1] || '')] || '';
     return {
       queue_id:r[0],
       source_id:r[1],
-      url:r[2],
+      url:url,
       priority:Number(r[3] || 0),
       status:String(r[4] || ''),
       queued_at:r[5],
