@@ -1,11 +1,17 @@
 /* OCE Mission Control V1
  * LEGO block: simple objective -> backend mission -> live persistent progress.
  * This replaces browser-only discovery as the normal operator path.
+ *
+ * Pagination is display-only: it reads the persistent queue from the backend and
+ * never changes queue creation, discovery, worker limits, or recursive crawling.
  */
 
 const OCE_MISSION_POLL_MS = 2500;
 let oceMissionId = '';
 let oceMissionTimer = null;
+let oceQueuePage = 1;
+let oceQueuePageSize = 25;
+let oceQueueRequestSerial = 0;
 
 function missionApiUrl(action, params = {}) {
   const query = new URLSearchParams({ action, ...params });
@@ -47,8 +53,86 @@ function missionStatusText(status) {
   }[status] || status || 'Working';
 }
 
+function renderQueueRows(items) {
+  const body = scout$('scoutQueueRows');
+  if (!body) return;
+  const queue = Array.isArray(items) ? items : [];
+  body.innerHTML = queue.length
+    ? queue.map((item, index) => `
+      <tr>
+        <td>${index + 1 + ((oceQueuePage - 1) * oceQueuePageSize)}</td>
+        <td><span class="queue-priority">${scoutEsc(item.priority)}</span></td>
+        <td><a href="${scoutEsc(item.url)}" target="_blank" rel="noopener">${scoutEsc(item.url)}</a></td>
+        <td>${scoutEsc(item.source || 'mission')}</td>
+        <td>${scoutEsc(item.status)}</td>
+        <td>${scoutEsc(item.queued_at ? new Date(item.queued_at).toLocaleString() : '')}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6">No queue records on this page.</td></tr>';
+}
+
+function ensureQueuePager() {
+  const card = document.querySelector('.scout-queue-card');
+  if (!card) return null;
+  let pager = card.querySelector('#oceQueuePager');
+  if (pager) return pager;
+
+  pager = document.createElement('div');
+  pager.id = 'oceQueuePager';
+  pager.className = 'queue-pager';
+  pager.innerHTML = `
+    <button type="button" class="secondary" id="oceQueuePrev">Previous</button>
+    <span id="oceQueuePageLabel">Page 1 of 1</span>
+    <button type="button" class="secondary" id="oceQueueNext">Next</button>
+    <label>Rows <select id="oceQueuePageSize"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>`;
+  card.querySelector('.table-wrap').after(pager);
+
+  pager.querySelector('#oceQueuePrev').onclick = () => loadMissionQueuePage(oceQueuePage - 1);
+  pager.querySelector('#oceQueueNext').onclick = () => loadMissionQueuePage(oceQueuePage + 1);
+  pager.querySelector('#oceQueuePageSize').value = String(oceQueuePageSize);
+  pager.querySelector('#oceQueuePageSize').onchange = (event) => {
+    oceQueuePageSize = Number(event.target.value) || 25;
+    loadMissionQueuePage(1);
+  };
+  return pager;
+}
+
+function renderQueuePager(pageData) {
+  const pager = ensureQueuePager();
+  if (!pager) return;
+  const totalPages = Number(pageData && pageData.total_pages || 0);
+  const page = Number(pageData && pageData.page || 1);
+  const total = Number(pageData && pageData.total || 0);
+  pager.querySelector('#oceQueuePageLabel').textContent = totalPages
+    ? `Page ${page} of ${totalPages} · ${total} total`
+    : 'Page 1 of 0 · 0 total';
+  pager.querySelector('#oceQueuePrev').disabled = !(pageData && pageData.has_previous);
+  pager.querySelector('#oceQueueNext').disabled = !(pageData && pageData.has_next);
+  pager.querySelector('#oceQueuePageSize').value = String(oceQueuePageSize);
+}
+
+async function loadMissionQueuePage(page) {
+  if (!oceMissionId) return;
+  const requestedPage = Math.max(1, Number(page || 1));
+  const serial = ++oceQueueRequestSerial;
+  try {
+    const payload = await missionApi('mission_queue_page', {
+      mission_id: oceMissionId,
+      page: String(requestedPage),
+      page_size: String(oceQueuePageSize)
+    });
+    if (serial !== oceQueueRequestSerial || !oceMissionId) return;
+    const data = payload.queue || {};
+    oceQueuePage = Number(data.page || requestedPage);
+    renderQueueRows(data.items || []);
+    renderQueuePager(data);
+  } catch (error) {
+    if (serial !== oceQueueRequestSerial) return;
+    const body = scout$('scoutQueueRows');
+    if (body) body.innerHTML = `<tr><td colspan="6">Queue page temporarily unavailable: ${scoutEsc(String(error.message || error))}</td></tr>`;
+  }
+}
+
 function renderPersistentQueue(mission) {
-  const queue = Array.isArray(mission.queue_items) ? mission.queue_items : [];
   const stats = mission.queue || {};
 
   scout$('scoutQueueCount').textContent = String(stats.total || 0);
@@ -56,18 +140,7 @@ function renderPersistentQueue(mission) {
   scout$('scoutDoneCount').textContent = String(stats.completed || 0);
   scout$('scoutFailedCount').textContent = String((stats.failed || 0) + (stats.blocked || 0));
 
-  const body = scout$('scoutQueueRows');
-  body.innerHTML = queue.length
-    ? queue.map((item, index) => `
-      <tr>
-        <td>${index + 1}</td>
-        <td><span class="queue-priority">${scoutEsc(item.priority)}</span></td>
-        <td><a href="${scoutEsc(item.url)}" target="_blank" rel="noopener">${scoutEsc(item.url)}</a></td>
-        <td>${scoutEsc(item.source || 'mission')}</td>
-        <td>${scoutEsc(item.status)}</td>
-        <td>${scoutEsc(item.queued_at ? new Date(item.queued_at).toLocaleString() : '')}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="6">Waiting for the first persistent collection result…</td></tr>';
+  ensureQueuePager();
 }
 
 function renderMission(mission) {
@@ -98,6 +171,7 @@ async function pollMission() {
   try {
     const payload = await missionApi('mission_status', { mission_id: oceMissionId });
     renderMission(payload.mission);
+    await loadMissionQueuePage(oceQueuePage);
 
     const terminal = ['COMPLETED', 'COMPLETED_WITH_ISSUES', 'FAILED'].includes(payload.mission.status);
     if (terminal) {
@@ -120,6 +194,8 @@ async function startPersistentMission() {
   if (oceMissionTimer) clearInterval(oceMissionTimer);
   oceMissionTimer = null;
   oceMissionId = '';
+  oceQueuePage = 1;
+  oceQueueRequestSerial += 1;
 
   scout$('scoutRun').disabled = true;
   scout$('scoutRun').textContent = 'Starting…';
@@ -131,6 +207,7 @@ async function startPersistentMission() {
     const mission = payload.mission;
     oceMissionId = mission.mission_id;
     renderMission(mission);
+    await loadMissionQueuePage(1);
 
     // Kick the first controlled collection immediately. The scheduled worker
     // remains responsible for continued processing and expansion.
