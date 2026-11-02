@@ -99,6 +99,22 @@
         <tbody id="scoutQueueRows"></tbody>
       </table>
     </div>
+
+    <div id="queuePagination" class="queue-pagination" aria-label="Source Queue pagination">
+      <div class="queue-page-info" id="queuePageInfo">No queue records loaded.</div>
+      <div class="queue-page-controls">
+        <button id="queuePrev" class="secondary" type="button" disabled>Previous</button>
+        <span id="queuePageLabel">Page 1 of 1</span>
+        <button id="queueNext" class="secondary" type="button" disabled>Next</button>
+        <label for="queuePageSize">Rows</label>
+        <select id="queuePageSize" aria-label="Source Queue rows per page">
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+    </div>
+
     <div class="notice">Fast mode processes the highest-ranked 300 sources first. Lower-ranked discoveries remain persistent and can be activated later in batches.</div>
   </section>
 
