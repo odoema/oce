@@ -1,13 +1,14 @@
-/* OCE Mission Orchestrator V2.1
+/* OCE Mission Orchestrator V2.2
  * LEGO block: objective -> ranked public discovery -> persistent queue -> controlled batches.
- * Fast mode processes the highest-ranked 300 sources first. Additional sources remain
+ * Fast mode processes the highest-ranked active set first. Additional sources remain
  * persistent but deferred until the operator explicitly expands the mission.
  *
- * This block does not scrape directly. QueueWorker owns collection.
+ * Mission control can pass an explicit mission ID to the worker. Scheduled automation
+ * continues to use the newest eligible mission automatically.
  */
 
 const OCE_MISSION = {
-  VERSION: '2.1.0',
+  VERSION: '2.2.0',
   RUNS_SHEET: 'SCOUT_RUNS',
   MAX_SEEDS: 6,
   AUTOMATION_MINUTES: 1,
@@ -84,9 +85,9 @@ function planMissionSeeds_(topic) {
   }).sort(function(a,b){return b.score-a.score;}).slice(0,OCE_MISSION.MAX_SEEDS);
 }
 
-function runOceMissionBatch(limit) {
+function runOceMissionBatch(limit, missionId) {
   enforceOceMissionSourceCaps_();
-  const result = runQueueWorker(limit || 5);
+  const result = runQueueWorker(limit || 5, missionId || '');
   enforceOceMissionSourceCaps_();
   refreshOceMissionRuns_();
   return result;
