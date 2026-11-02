@@ -38,11 +38,9 @@ jobs:
 
       - name: Check Apps Script syntax
         run: |
-          node --check apps-script/SourceRegistry.gs
-          node --check apps-script/QueueWorker.gs
-          node --check apps-script/MissionOrchestrator.gs
-          node --check apps-script/CollectorGateway.gs
-          node --check apps-script/UrlScraper.gs
+          for file in apps-script/SourceRegistry.gs apps-script/QueueWorker.gs apps-script/MissionOrchestrator.gs apps-script/CollectorGateway.gs apps-script/UrlScraper.gs; do
+            node --check < "$file"
+          done
 
       - name: Check for obvious secret filenames
         run: |
