@@ -21,6 +21,7 @@ jobs:
           test -f apps-script/appsscript.json
           test -f web/index.html
           test -f web/app.js
+          test -f web/discovery-brain.js
           test -f web/scout.js
           test -f README.md
           test -f docs/security.md
@@ -28,6 +29,7 @@ jobs:
       - name: Check frontend JavaScript syntax
         run: |
           node --check web/app.js
+          node --check web/discovery-brain.js
           node --check web/scout.js
 
       - name: Check source registry syntax
