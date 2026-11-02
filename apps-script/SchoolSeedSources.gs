@@ -159,15 +159,15 @@ function bingDiscoverHtml_(query) {
   if (code < 200 || code >= 400) throw Error('HTML search returned HTTP '+code);
 
   const html = response.getContentText();
-  const blocks = html.match(/<li[^>]*class=["'][^"']*\\bb_algo\\b[^"']*["'][\\s\\S]*?<\\/li>/gi) || [];
+  const blocks = html.match(/<li[^>]*class=["'][^"']*\bb_algo\b[^"']*["'][\s\S]*?<\/li>/gi) || [];
   const results = [];
   blocks.forEach(function(block) {
-    const anchor = block.match(/<a[^>]+href=["'](https?:\\/\\/[^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i);
+    const anchor = block.match(/<a[^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
     if (!anchor) return;
     const link = decodeHtmlEntities_(anchor[1]);
-    if (!/^https?:\\/\\//i.test(link) || isBlockedDiscoveryHost_(link)) return;
+    if (!/^https?:\/\//i.test(link) || isBlockedDiscoveryHost_(link)) return;
     const title = stripHtml_(decodeHtmlEntities_(anchor[2]));
-    const descriptionMatch = block.match(/<p[^>]*>([\\s\\S]*?)<\\/p>/i);
+    const descriptionMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
     const description = descriptionMatch ? stripHtml_(decodeHtmlEntities_(descriptionMatch[1])) : '';
     results.push({url:normalizeDiscoveryUrl_(link),title:title,description:description,query:query});
   });
@@ -181,7 +181,7 @@ function decodeHtmlEntities_(value) {
 }
 
 function stripHtml_(value) {
-  return String(value || '').replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim();
+  return String(value || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 }
 
 function rankMissionDiscoveryCandidates_(items, objective) {
@@ -217,7 +217,7 @@ function rankMissionDiscoveryCandidates_(items, objective) {
 
     if (/uganda|ugandan/.test(haystack)) score += 8;
     if (/facebook|instagram|youtube|tiktok|linkedin/.test(host)) score -= 25;
-    if (/\\.pdf($|[?#])/.test(url)) score -= 3;
+    if (/\.pdf($|[?#])/.test(url)) score -= 3;
 
     ranked.push({url:url,title:item.title || url,description:item.description || '',query:item.query,priority:Math.max(1,Math.min(99,Math.round(score)))});
   });
@@ -238,7 +238,7 @@ function normalizeDiscoveryUrl_(value) {
 }
 
 function discoveryHost_(url) {
-  const match = String(url || '').match(/^https?:\/\/([^\\/?#]+)/i);
+  const match = String(url || '').match(/^https?:\/\/([^\/?#]+)/i);
   return match ? match[1].toLowerCase().replace(/^www\./,'').replace(/:\d+$/,'') : '';
 }
 
@@ -267,7 +267,6 @@ function syncMissionSeedCounts_(missionId) {
   const queueRows = queue.getRange(2,1,queue.getLastRow()-1,11).getValues();
   const missionRows = queueRows.filter(function(r){ return String(r[10] || '').indexOf('mission_id='+missionId) !== -1; });
   const queued = missionRows.filter(function(r){ return String(r[4] || '').toUpperCase() === 'QUEUED'; }).length;
-  const completed = missionRows.filter(function(r){ return String(r[4] || '').toUpperCase() === 'COMPLETED'; }).length;
   const failed = missionRows.filter(function(r){ return String(r[4] || '').toUpperCase() === 'FAILED'; }).length;
   const discovered = missionRows.length;
 
