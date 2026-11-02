@@ -7,6 +7,7 @@ on:
       - 'apps-script/**'
       - '.clasp.json'
       - '.claspignore'
+      - 'scripts/sync-apps-script.mjs'
       - '.github/workflows/apps-script-sync.yml'
   workflow_dispatch:
 
@@ -29,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate required CI credentials
         shell: bash
@@ -41,21 +42,10 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
-
-      - name: Install clasp
-        run: npm install --global @google/clasp@3.4.1
-
-      - name: Configure clasp credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          chmod 600 "$HOME/.clasprc.json"
-          echo "clasp $(clasp --version)"
-          clasp show-authorized-user
+          package-manager-cache: false
 
       - name: Validate Apps Script source set
         shell: bash
@@ -64,29 +54,25 @@ jobs:
           for file in apps-script/*.gs; do
             node --check < "$file"
           done
+          node --check scripts/sync-apps-script.mjs
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('Manifest JSON: OK')"
 
-      - name: Verify clasp project identity
+      - name: Verify Apps Script project identity
         shell: bash
         run: |
           set -euo pipefail
           actual_id="$(node -e "console.log(JSON.parse(require('fs').readFileSync('.clasp.json','utf8')).scriptId)")"
-          echo "clasp project: $actual_id"
+          echo "Apps Script project: $actual_id"
           if [ "$actual_id" != "$OCE_APPS_SCRIPT_ID" ]; then
             echo "The checked-in .clasp.json does not target the canonical OCE Apps Script project."
             exit 1
           fi
 
-      - name: Show Apps Script files to be pushed
-        run: clasp show-file-status --json
+      - name: Install Google API client
+        run: npm install --no-save --no-package-lock googleapis@188.0.0
 
-      - name: Push GitHub source to Apps Script
-        env:
-          DEBUG: clasp:*
-        run: clasp push --force
-
-      - name: Redeploy existing OCE web app deployment
-        run: clasp update-deployment "$OCE_APPS_SCRIPT_DEPLOYMENT_ID"
+      - name: Sync GitHub source directly to Apps Script
+        run: node scripts/sync-apps-script.mjs
 
       - name: Verify canonical OCE gateway health
         shell: bash
@@ -104,8 +90,8 @@ jobs:
             console.log(`Gateway ${x.version}: ${x.status}`);
           ' "$response"
 
-      - name: Remove temporary credentials
+      - name: Cleanup
         if: always()
         shell: bash
         run: |
-          rm -f "$HOME/.clasprc.json"
+          rm -rf node_modules package-lock.json
