@@ -3,7 +3,7 @@
  * Backend configuration belongs to infrastructure, never to the operator.
  */
 const CONFIG = {
-  COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec'
+  COLLECTOR_ENDPOINT: 'https://script.google.com/macros/s/AKfycbygAIVH5Txxr7nWcpHRSk31nIWBVZrNs67LX9lEwesBmck1hrADZpZ2ln6ukVXrjNP3/exec'
 };
 
 let latest = null;
