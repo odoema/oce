@@ -90,7 +90,7 @@ function renderPersistentQueue(items, pagination) {
         <tr>
           <td>${startIndex + index + 1}</td>
           <td><span class="queue-priority">${scoutEsc(item.priority)}</span></td>
-          <td><a href="${scoutEsc(item.url)}" target="_blank" rel="noopener">${scoutEsc(item.url)}</a></td>
+          <td><a href="${scoutEsc(item.url)}" target="_blank" rel="noopener">${scoutEsc(item.url || 'URL unavailable')}</a></td>
           <td>${scoutEsc(item.source || 'mission')}</td>
           <td>${scoutEsc(item.status)}</td>
           <td>${scoutEsc(item.queued_at ? new Date(item.queued_at).toLocaleString() : '')}</td>
@@ -128,9 +128,6 @@ async function loadMissionQueuePage(page = oceQueuePage) {
       page_size: String(oceQueuePageSize)
     });
 
-    // Mission polling and manual pagination can overlap. Only the newest queue
-    // request is allowed to paint the table, otherwise an older page-1 response
-    // can overwrite a freshly selected page-2/page-3 response.
     if (requestSeq !== oceQueueRequestSeq) return;
     if (!payload.queue || !Array.isArray(payload.queue.items)) {
       throw new Error('Gateway returned an invalid Source Queue pagination payload.');
@@ -156,7 +153,6 @@ function renderMission(mission) {
   let detail = `${processed} processed · ${active} active · top ${limit} selected`;
   if (deferred) detail += ` · ${deferred} waiting`;
   detail += ` · ${persistent} persistent sources`;
-  if (mission.status === 'COMPLETED_WITH_ISSUES') detail += ' · review failed/blocked sources';
 
   missionProgress(mission.progress, missionStatusText(mission.status), detail);
   loadMissionQueuePage(oceQueuePage);
@@ -177,6 +173,15 @@ function renderMission(mission) {
 
   setQueuePaginationControls();
   scoutSetStatus(`Mission ${missionStatusText(mission.status).toLowerCase()}: ${processed} processed, ${active} active, ${deferred} waiting.`);
+}
+
+async function runMissionWorker(limit = 5) {
+  if (!oceMissionId) return null;
+  const payload = await missionApi('run_worker', {
+    limit: String(Math.max(1, Math.min(10, limit))),
+    mission_id: oceMissionId
+  });
+  return payload.worker || null;
 }
 
 async function pollMission() {
@@ -222,10 +227,18 @@ async function startPersistentMission() {
     oceMissionId = mission.mission_id;
     renderMission(mission);
 
-    fetch(missionApiUrl('run_worker', { limit: '1' }), { cache: 'no-store' }).catch(() => {});
+    scoutSetStatus('Mission started. Collecting the active mission sources…');
+    try {
+      const worker = await runMissionWorker(5);
+      if (worker && worker.processed === 0 && worker.mission_id) {
+        scoutSetStatus('Mission worker ran but found no queued records for this mission.');
+      }
+    } catch (workerError) {
+      scoutSetStatus(`Mission worker error: ${String(workerError.message || workerError)}`);
+    }
 
+    await pollMission();
     oceMissionTimer = setInterval(pollMission, OCE_MISSION_POLL_MS);
-    setTimeout(pollMission, 900);
     scout$('scoutRun').textContent = 'Mission Running…';
   } catch (error) {
     scout$('scoutRun').disabled = false;
@@ -250,7 +263,12 @@ async function expandCurrentMission() {
     oceQueueRequestSeq += 1;
     renderMission(payload.result.mission);
     scoutSetStatus(`Added the next ${payload.result.promoted || 0} sources to the active mission set.`);
-    fetch(missionApiUrl('run_worker', { limit: '1' }), { cache: 'no-store' }).catch(() => {});
+    try {
+      await runMissionWorker(5);
+    } catch (workerError) {
+      scoutSetStatus(`Mission worker error: ${String(workerError.message || workerError)}`);
+    }
+    await pollMission();
   } catch (error) {
     scoutSetStatus(String(error.message || error));
   } finally {
