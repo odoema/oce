@@ -1,4 +1,4 @@
-// OCE Collector Gateway V4.2
+// OCE Collector Gateway V4.3
 // Browser-facing gateway for public collection and mission control.
 // No collector token is ever sent to the browser.
 // Public/authorized pages only. No login, CAPTCHA, paywall or access-control bypass.
@@ -9,7 +9,7 @@ function doGet(e) {
     var action = String(params.action || '').trim().toLowerCase();
 
     if (action === 'health') {
-      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.2.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','mission_queue_page','queue_worker','automation_status','health']});
+      return gatewayJson_({ok:true,service:'OCE Collector Gateway',version:'4.3.0',status:'ONLINE',capabilities:['single_url_scan','mission_start','mission_status','mission_expand','mission_queue_page','queue_worker','automation_status','health']});
     }
 
     if (action === 'start_mission') {
@@ -45,7 +45,8 @@ function doGet(e) {
     if (action === 'run_worker') {
       var limit = Number(params.limit || 5);
       limit = Math.max(1, Math.min(10, limit));
-      return gatewayJson_({ok:true,worker:runOceMissionBatch(limit)});
+      var workerMissionId = String(params.mission_id || '').trim();
+      return gatewayJson_({ok:true,worker:runOceMissionBatch(limit,workerMissionId)});
     }
 
     if (action === 'automation_status') {
@@ -64,7 +65,7 @@ function doGet(e) {
 function startOceMissionGateway(topic) { return startOceMission(topic); }
 function getOceMissionStatusGateway(missionId) { return getOceMissionStatus(missionId); }
 function getOceMissionQueuePageGateway(missionId,page,pageSize) { return getOceMissionQueuePage(missionId,page,pageSize); }
-function runOceMissionBatchGateway(limit) { return runOceMissionBatch(limit || 5); }
+function runOceMissionBatchGateway(limit,missionId) { return runOceMissionBatch(limit || 5,missionId || ''); }
 function expandOceMissionGateway(missionId, additional) { return expandOceMission(missionId, additional || 300); }
 
 function getAutomationStatus_() {
@@ -84,13 +85,13 @@ function gatewayJson_(payload) {
 }
 
 function testCollectorGatewayHealth() {
-  return {ok:true,gateway:'READY',version:'4.2.0',automation:getAutomationStatus_()};
+  return {ok:true,gateway:'READY',version:'4.3.0',automation:getAutomationStatus_()};
 }
 
 function testCollectorGatewayMissionIntegration() {
   return {
     ok:true,
-    gateway_version:'4.2.0',
+    gateway_version:'4.3.0',
     start_mission_available:typeof startOceMission==='function',
     mission_status_available:typeof getOceMissionStatus==='function',
     mission_queue_page_available:typeof getOceMissionQueuePage==='function',
