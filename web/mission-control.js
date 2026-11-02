@@ -5,8 +5,12 @@
  */
 
 const OCE_MISSION_POLL_MS = 2500;
+const OCE_QUEUE_DEFAULT_PAGE_SIZE = 25;
 let oceMissionId = '';
 let oceMissionTimer = null;
+let oceQueuePage = 1;
+let oceQueuePageSize = OCE_QUEUE_DEFAULT_PAGE_SIZE;
+let oceQueueTotalPages = 0;
 
 function missionApiUrl(action, params = {}) {
   const query = new URLSearchParams({ action, ...params });
@@ -49,27 +53,64 @@ function missionStatusText(status) {
   }[status] || status || 'Working';
 }
 
-function renderPersistentQueue(mission) {
-  const queue = Array.isArray(mission.queue_items) ? mission.queue_items : [];
-  const stats = mission.queue || {};
+function renderPersistentQueue(items, pagination) {
+  const queue = Array.isArray(items) ? items : [];
+  const page = pagination || {};
+  const currentPage = Number(page.page || oceQueuePage || 1);
+  const pageSize = Number(page.page_size || oceQueuePageSize || OCE_QUEUE_DEFAULT_PAGE_SIZE);
+  const total = Number(page.total || 0);
+  const totalPages = Number(page.total_pages || 0);
 
-  scout$('scoutQueueCount').textContent = String(stats.total || 0);
-  scout$('scoutQueuedCount').textContent = String((stats.queued || 0) + (stats.scraping || 0));
-  scout$('scoutDoneCount').textContent = String(stats.completed || 0);
-  scout$('scoutFailedCount').textContent = String((stats.failed || 0) + (stats.blocked || 0));
+  oceQueuePage = currentPage;
+  oceQueuePageSize = pageSize;
+  oceQueueTotalPages = totalPages;
 
   const body = scout$('scoutQueueRows');
+  const startIndex = total ? ((currentPage - 1) * pageSize) : 0;
   body.innerHTML = queue.length
     ? queue.map((item, index) => `
       <tr>
-        <td>${index + 1}</td>
+        <td>${startIndex + index + 1}</td>
         <td><span class="queue-priority">${scoutEsc(item.priority)}</span></td>
         <td><a href="${scoutEsc(item.url)}" target="_blank" rel="noopener">${scoutEsc(item.url)}</a></td>
         <td>${scoutEsc(item.source || 'mission')}</td>
         <td>${scoutEsc(item.status)}</td>
         <td>${scoutEsc(item.queued_at ? new Date(item.queued_at).toLocaleString() : '')}</td>
       </tr>`).join('')
-    : '<tr><td colspan="6">Waiting for the first persistent collection result…</td></tr>';
+    : '<tr><td colspan="6">No source records on this page.</td></tr>';
+
+  const info = scout$('queuePageInfo');
+  const label = scout$('queuePageLabel');
+  const prev = scout$('queuePrev');
+  const next = scout$('queueNext');
+  if (info) {
+    if (!total) info.textContent = 'No queue records loaded.';
+    else {
+      const first = startIndex + 1;
+      const last = Math.min(startIndex + queue.length, total);
+      info.textContent = `Showing ${first}–${last} of ${total} sources`;
+    }
+  }
+  if (label) label.textContent = `Page ${currentPage} of ${Math.max(1, totalPages)}`;
+  if (prev) prev.disabled = currentPage <= 1 || !totalPages;
+  if (next) next.disabled = currentPage >= totalPages || !totalPages;
+}
+
+async function loadMissionQueuePage(page = oceQueuePage) {
+  if (!oceMissionId) {
+    renderPersistentQueue([], {page:1,page_size:oceQueuePageSize,total:0,total_pages:0});
+    return;
+  }
+  try {
+    const payload = await missionApi('mission_queue_page', {
+      mission_id: oceMissionId,
+      page: String(Math.max(1, page)),
+      page_size: String(oceQueuePageSize)
+    });
+    renderPersistentQueue(payload.queue.items, payload.queue);
+  } catch (error) {
+    scoutSetStatus(`Source Queue pagination temporarily unavailable: ${String(error.message || error)}`);
+  }
 }
 
 function renderMission(mission) {
@@ -88,7 +129,7 @@ function renderMission(mission) {
   if (mission.status === 'COMPLETED_WITH_ISSUES') detail += ' · review failed/blocked sources';
 
   missionProgress(mission.progress, missionStatusText(mission.status), detail);
-  renderPersistentQueue(mission);
+  loadMissionQueuePage(oceQueuePage);
 
   const plan = scout$('discoveryPlan');
   if (plan) {
@@ -134,11 +175,14 @@ async function startPersistentMission() {
   if (oceMissionTimer) clearInterval(oceMissionTimer);
   oceMissionTimer = null;
   oceMissionId = '';
+  oceQueuePage = 1;
+  oceQueueTotalPages = 0;
 
   scout$('scoutRun').disabled = true;
   scout$('scoutRun').textContent = 'Starting…';
   scoutSetStatus('Mission Control is starting the OCE engine in FAST mode…');
   missionProgress(3, 'Starting mission', 'Selecting the highest-ranked public sources first. Fast mode targets 300 sources.');
+  renderPersistentQueue([], {page:1,page_size:oceQueuePageSize,total:0,total_pages:0});
 
   try {
     const payload = await missionApi('start_mission', { topic, active_limit: '300' });
@@ -170,6 +214,7 @@ async function expandCurrentMission() {
   scoutSetStatus(`Activating the next ${batch} highest-ranked waiting sources…`);
   try {
     const payload = await missionApi('expand_mission', { mission_id: oceMissionId, additional: String(batch) });
+    oceQueuePage = 1;
     renderMission(payload.result.mission);
     scoutSetStatus(`Added the next ${payload.result.promoted || 0} sources to the active mission set.`);
     fetch(missionApiUrl('run_worker', { limit: '1' }), { cache: 'no-store' }).catch(() => {});
@@ -188,8 +233,29 @@ function initMissionControl() {
   const expand = scout$('missionExpand');
   if (expand) expand.onclick = expandCurrentMission;
 
+  const prev = scout$('queuePrev');
+  const next = scout$('queueNext');
+  const pageSize = scout$('queuePageSize');
+  if (prev) prev.onclick = () => {
+    if (oceQueuePage > 1) {
+      oceQueuePage -= 1;
+      loadMissionQueuePage(oceQueuePage);
+    }
+  };
+  if (next) next.onclick = () => {
+    if (oceQueuePage < oceQueueTotalPages) {
+      oceQueuePage += 1;
+      loadMissionQueuePage(oceQueuePage);
+    }
+  };
+  if (pageSize) pageSize.onchange = () => {
+    oceQueuePageSize = Math.max(1, Math.min(100, Number(pageSize.value || 25)));
+    oceQueuePage = 1;
+    loadMissionQueuePage(1);
+  };
+
   const notice = document.querySelector('.scout-queue-card .notice');
-  if (notice) notice.textContent = 'Fast mode processes the highest-ranked 300 sources first. Lower-ranked discoveries remain persistent and can be activated in additional batches.';
+  if (notice) notice.textContent = 'Fast mode processes the highest-ranked 300 sources first. Lower-ranked discoveries remain persistent and can be activated in additional batches. Use the pagination controls to browse the complete mission source queue.';
 
   scout$('scoutClear').onclick = () => scoutSetStatus('Persistent queue is managed by OCE Mission Control. Lower-ranked sources are deferred, not deleted.');
   scout$('scoutExport').onclick = () => {
