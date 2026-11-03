@@ -1,258 +1,236 @@
-/* OCE Discovery Intelligence V1.0
- * LEGO block: objective -> query expansion -> candidate search -> ranked candidates.
- * This module does NOT replace the persistent queue or recursive crawler.
- * It only produces candidate URLs that a later gateway/mission step may inject
- * through the existing registerAndQueueSource() path.
+/* OCE Discovery Intelligence V3
+ * LEGO block: objective -> query expansion -> external search candidates -> ranked seeds.
+ *
+ * The crawler remains the collection engine. This block only discovers candidate URLs and ranks them.
+ * No API key is stored in source code. Configure Script Properties:
+ *   OCE_SEARCH_PROVIDER=BRAVE
+ *   OCE_SEARCH_API_KEY=<secret>
+ *
+ * Brave's Web Search API is used as a candidate generator. Search results are never treated as facts;
+ * OCE queues the URLs for its normal robots-aware crawler and extracts evidence from the source itself.
  */
 
-const OCE_DISCOVERY_INTELLIGENCE = {
-  VERSION: '1.0.0',
-  MAX_QUERIES: 12,
-  MAX_CANDIDATES: 50,
-  PROVIDER: 'BING_RSS'
+const OCE_DISCOVERY = {
+  VERSION: '3.0.0',
+  MAX_QUERIES: 10,
+  RESULTS_PER_QUERY: 20,
+  MAX_CANDIDATES: 60,
+  DEFAULT_SEEDS: 8,
+  PROVIDER: 'BRAVE'
 };
 
-function buildDiscoveryPlan(objective) {
-  const text = String(objective || '').trim();
-  if (!text) throw Error('Discovery objective is required.');
+// Curated authoritative sources remain useful, but only as supplemental hints for matching geographies.
+const OCE_DISCOVERY_CATALOG = [
+  { id: 'icpau-firms', name: 'ICPAU licensed firms portal', url: 'https://icpauportal.com/external_portal/firms', country: 'UG', keywords: ['auditor', 'audit', 'accountant', 'accounting', 'cpa', 'assurance', 'tax', 'professional'], authority: 99, type: 'REGULATORY_REGISTER' },
+  { id: 'icpau', name: 'Institute of Certified Public Accountants of Uganda', url: 'https://www.icpau.co.ug/accountancy-practice', country: 'UG', keywords: ['auditor', 'audit', 'accountant', 'accounting', 'cpa', 'assurance', 'tax'], authority: 98, type: 'PROFESSIONAL_BODY' },
+  { id: 'ursb', name: 'Uganda Registration Services Bureau', url: 'https://ursb.go.ug/search-ursb-registries/', country: 'UG', keywords: ['business', 'company', 'supplier', 'vendor', 'firm', 'organization', 'organisation', 'ngo', 'registry'], authority: 98, type: 'BUSINESS_REGISTRY' },
+  { id: 'yellow-uganda', name: 'Yellow Uganda business directory', url: 'https://www.yellow.ug/', country: 'UG', keywords: ['business', 'company', 'supplier', 'vendor', 'restaurant', 'hotel', 'retail', 'service', 'directory', 'shop'], authority: 78, type: 'BUSINESS_DIRECTORY' },
+  { id: 'startup-uganda', name: 'Startup Uganda directory', url: 'https://portal.startup.ug/directory', country: 'UG', keywords: ['startup', 'business', 'technology', 'tech', 'company', 'innovation'], authority: 82, type: 'STARTUP_DIRECTORY' },
+  { id: 'myugandaonline', name: 'MyUgandaOnline directory', url: 'https://myugandaonline.com/directory.php', country: 'UG', keywords: ['business', 'company', 'supplier', 'vendor', 'directory', 'service'], authority: 70, type: 'BUSINESS_DIRECTORY' },
+  { id: 'companydata-uganda', name: 'CompanyData Uganda directory', url: 'https://companydata.com/directory/business-directory-uganda/', country: 'UG', keywords: ['business', 'company', 'firm', 'directory'], authority: 68, type: 'BUSINESS_DIRECTORY' }
+];
 
-  const normalized = normalizeDiscoveryObjective_(text);
-  const location = inferLocation_(normalized);
-  const entity = inferEntity_(normalized, location);
-  const queries = expandDiscoveryQueries_(normalized, entity, location);
+function discoveryTokens_(topic) {
+  return String(topic || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
+    .filter(function (t) { return t.length > 2; })
+    .map(function (t) { return t.replace(/(ies)$/, 'y').replace(/s$/, ''); })
+    .slice(0, 18);
+}
 
-  return {
-    ok: true,
-    version: OCE_DISCOVERY_INTELLIGENCE.VERSION,
-    objective: text,
-    entity: entity,
-    location: location,
-    queries: queries.slice(0, OCE_DISCOVERY_INTELLIGENCE.MAX_QUERIES),
-    source_hints: buildSourceHints_(entity, location),
-    generated_at: new Date().toISOString()
+function discoveryCountryCode_(topic) {
+  const t = String(topic || '').toLowerCase();
+  const map = {
+    uganda: 'UG', ugandan: 'UG', kenya: 'KE', kenyan: 'KE', tanzania: 'TZ',
+    rwanda: 'RW', burundi: 'BI', nigeria: 'NG', ghana: 'GH', zambia: 'ZM',
+    zimbabwe: 'ZW', malawi: 'MW', ethiopia: 'ET', southafrica: 'ZA', 'south africa': 'ZA',
+    usa: 'US', 'united states': 'US', uk: 'GB', 'united kingdom': 'GB', canada: 'CA',
+    australia: 'AU', india: 'IN'
   };
-}
-
-function discoverSearchCandidates(objective) {
-  const plan = buildDiscoveryPlan(objective);
-  const candidates = [];
-  const seen = {};
-
-  plan.queries.forEach(function(query, queryIndex) {
-    if (candidates.length >= OCE_DISCOVERY_INTELLIGENCE.MAX_CANDIDATES) return;
-
-    const items = searchBingRss_(query);
-    items.forEach(function(item) {
-      if (candidates.length >= OCE_DISCOVERY_INTELLIGENCE.MAX_CANDIDATES) return;
-      const url = canonicalDiscoveryUrl_(item.url);
-      if (!url || seen[url]) return;
-      seen[url] = true;
-
-      const score = scoreDiscoveryCandidate_(url, item.title, item.description, plan, queryIndex);
-      candidates.push({
-        url: url,
-        title: item.title || '',
-        description: item.description || '',
-        query: query,
-        provider: OCE_DISCOVERY_INTELLIGENCE.PROVIDER,
-        score: score,
-        source_type: classifyDiscoverySource_(url, plan),
-        provenance: 'DISCOVERY_INTELLIGENCE_V1'
-      });
-    });
-  });
-
-  candidates.sort(function(a, b) { return b.score - a.score; });
-  return {
-    ok: true,
-    version: OCE_DISCOVERY_INTELLIGENCE.VERSION,
-    objective: plan.objective,
-    plan: plan,
-    candidate_count: candidates.length,
-    candidates: candidates
-  };
-}
-
-function queueDiscoveryCandidates(objective, maxCandidates) {
-  const result = discoverSearchCandidates(objective);
-  if (!result.candidates.length) {
-    return {ok:true, objective:result.objective, discovered:0, attempted:0, queued:0, results:[]};
-  }
-
-  const requested = Number(maxCandidates || result.candidates.length);
-  const limit = Math.max(1, Math.min(requested, result.candidates.length));
-  const queued = [];
-
-  for (let i = 0; i < limit; i++) {
-    const candidate = result.candidates[i];
-    try {
-      const queuedResult = registerAndQueueSource({
-        url: candidate.url,
-        source_type: candidate.source_type,
-        topic: result.objective,
-        label: candidate.title,
-        priority: candidate.score,
-        provenance: candidate.provenance,
-        notes: 'Search candidate via ' + candidate.provider + '; query=' + candidate.query
-      });
-      queued.push({
-        url: candidate.url,
-        score: candidate.score,
-        status: queuedResult.status,
-        queue_id: queuedResult.queue_id || ''
-      });
-    } catch (err) {
-      queued.push({
-        url: candidate.url,
-        score: candidate.score,
-        status: 'FAILED',
-        error: String(err.message || err)
-      });
-    }
-  }
-
-  return {
-    ok: true,
-    objective: result.objective,
-    discovered: result.candidate_count,
-    attempted: limit,
-    queued: queued.filter(function(item) { return item.status === 'QUEUED'; }).length,
-    results: queued
-  };
-}
-
-function searchBingRss_(query) {
-  const endpoint = 'https://www.bing.com/search?format=rss&q=' + encodeURIComponent(query);
-  try {
-    const response = UrlFetchApp.fetch(endpoint, {
-      method: 'get',
-      muteHttpExceptions: true,
-      followRedirects: true,
-      validateHttpsCertificates: true
-    });
-    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return [];
-
-    const document = XmlService.parse(response.getContentText());
-    const root = document.getRootElement();
-    const channel = root.getChild('channel');
-    if (!channel) return [];
-
-    return channel.getChildren('item').map(function(item) {
-      return {
-        title: childText_(item, 'title'),
-        url: childText_(item, 'link'),
-        description: childText_(item, 'description')
-      };
-    });
-  } catch (err) {
-    console.warn('Bing RSS discovery failed: ' + String(err.message || err));
-    return [];
-  }
-}
-
-function expandDiscoveryQueries_(objective, entity, location) {
-  const queries = [];
-  const base = [entity, location].filter(Boolean).join(' ').trim() || objective;
-  const variants = [
-    base,
-    base + ' directory',
-    base + ' list',
-    base + ' registry',
-    base + ' database',
-    base + ' official',
-    base + ' association',
-    base + ' providers',
-    base + ' organizations',
-    base + ' companies',
-    'site:go.ug ' + base,
-    'site:org ' + base
-  ];
-
-  variants.forEach(function(query) {
-    const clean = String(query || '').replace(/\s+/g, ' ').trim();
-    if (clean && queries.indexOf(clean) < 0) queries.push(clean);
-  });
-
-  if (queries.length === 0) queries.push(objective);
-  return queries;
-}
-
-function buildSourceHints_(entity, location) {
-  const text = String(entity || '').toLowerCase();
-  const hints = ['DIRECTORY', 'REGISTRY', 'ORGANIZATION', 'OFFICIAL_WEBSITE'];
-  if (/hospital|health|clinic|medical/.test(text)) hints.unshift('HEALTH_FACILITY');
-  if (/school|university|college|education/.test(text)) hints.unshift('EDUCATION');
-  if (/company|business|supplier|vendor|enterprise/.test(text)) hints.unshift('BUSINESS');
-  if (location) hints.push('LOCAL_OR_REGIONAL');
-  return hints.filter(function(value, index, array) { return array.indexOf(value) === index; });
-}
-
-function scoreDiscoveryCandidate_(url, title, description, plan, queryIndex) {
-  const text = (String(url || '') + ' ' + String(title || '') + ' ' + String(description || '')).toLowerCase();
-  let score = 50 - Math.min(queryIndex * 2, 20);
-
-  if (plan.location && text.indexOf(plan.location.toLowerCase()) >= 0) score += 12;
-  if (plan.entity && text.indexOf(plan.entity.toLowerCase()) >= 0) score += 15;
-  if (/\.go\.ug\b/.test(String(url || '').toLowerCase())) score += 15;
-  if (/\.(gov|org|edu)(\.[a-z]{2})?$/.test(getHostname_(url))) score += 8;
-  if (/directory|registry|register|database|official|association/.test(text)) score += 5;
-  if (/facebook|instagram|twitter|x\.com|youtube|tiktok/.test(getHostname_(url))) score -= 15;
-  if (/login|signup|account|cart|checkout/.test(text)) score -= 10;
-
-  return Math.max(0, Math.min(100, score));
-}
-
-function classifyDiscoverySource_(url, plan) {
-  const host = getHostname_(url).toLowerCase();
-  if (/\.go\.ug$/.test(host)) return 'GOVERNMENT_SOURCE';
-  if (/\.edu\.ug$/.test(host)) return 'EDUCATION_SOURCE';
-  if (/\.org$/.test(host)) return 'ORGANIZATION_SOURCE';
-  if (plan.source_hints.indexOf('BUSINESS') >= 0) return 'BUSINESS_SOURCE';
-  return 'WEB_SOURCE';
-}
-
-function inferLocation_(text) {
-  const known = ['uganda', 'kampala', 'northern uganda', 'west nile', 'gulu', 'arua', 'nebbi', 'jinja', 'mbarara'];
-  const lower = text.toLowerCase();
-  for (let i = 0; i < known.length; i++) {
-    if (lower.indexOf(known[i]) >= 0) return known[i];
-  }
+  const keys = Object.keys(map).sort(function (a, b) { return b.length - a.length; });
+  for (let i = 0; i < keys.length; i++) if (t.indexOf(keys[i]) >= 0) return map[keys[i]];
   return '';
 }
 
-function inferEntity_(text, location) {
-  let entity = text;
-  if (location) entity = entity.replace(new RegExp('\\b' + escapeRegExp_(location) + '\\b', 'ig'), '');
-  return entity.replace(/\b(in|within|around|near|for)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+function discoveryQueryVariants_(objective) {
+  const base = String(objective || '').replace(/\s+/g, ' ').trim();
+  const variants = [
+    base,
+    base + ' list',
+    base + ' directory',
+    base + ' registry',
+    base + ' official',
+    base + ' association',
+    base + ' providers',
+    base + ' database'
+  ];
+  const country = discoveryCountryCode_(base);
+  if (country) {
+    variants.push(base + ' site:gov.' + country.toLowerCase());
+    variants.push(base + ' site:org.' + country.toLowerCase());
+  } else {
+    variants.push(base + ' site:gov');
+    variants.push(base + ' site:org');
+  }
+  const seen = {};
+  return variants.filter(function (q) {
+    q = q.replace(/\s+/g, ' ').trim();
+    if (!q || seen[q.toLowerCase()]) return false;
+    seen[q.toLowerCase()] = true;
+    return true;
+  }).slice(0, OCE_DISCOVERY.MAX_QUERIES);
 }
 
-function normalizeDiscoveryObjective_(text) {
-  return text.replace(/[\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
+function discoveryCatalogSeeds_(topic, limit) {
+  const tokens = discoveryTokens_(topic);
+  const country = discoveryCountryCode_(topic);
+  if (!country) return [];
+  return OCE_DISCOVERY_CATALOG.map(function (entry) {
+    let match = 0;
+    tokens.forEach(function (token) {
+      if (entry.keywords.some(function (k) { return k === token || (token.length > 3 && (k.indexOf(token) === 0 || token.indexOf(k) === 0)); })) match += 1;
+    });
+    if (entry.country !== country || match === 0) return null;
+    return {
+      name: entry.name,
+      url: ouCanonicalUrl_(entry.url),
+      score: Math.min(99, Math.round(entry.authority * 0.55 + Math.min(match, 3) * 14)),
+      source_type: entry.type,
+      reason: 'curated authoritative source: geography + topic match',
+      provenance: 'DISCOVERY_CATALOG'
+    };
+  }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, limit);
 }
 
-function canonicalDiscoveryUrl_(value) {
-  let url = String(value || '').trim();
-  if (!/^https?:\/\//i.test(url)) return '';
-  url = url.replace(/#.*$/, '');
-  return url.length > 2048 ? '' : url;
+function scoreSearchCandidate_(result, objective, queryHits) {
+  const url = String(result.url || '');
+  const title = String(result.title || '');
+  const description = String(result.description || '');
+  const hay = (url + ' ' + title + ' ' + description).toLowerCase();
+  const host = ouHostOf_(url);
+  const path = url.replace(/^https?:\/\/[^\/]+/i, '');
+  const tokens = discoveryTokens_(objective);
+  let score = 42;
+  let authority = 0;
+  const reasons = [];
+
+  if (/\.(gov|gov\.[a-z]{2,}|edu|edu\.[a-z]{2,})$/i.test(host)) { score += 24; authority += 24; reasons.push('public-sector/education domain'); }
+  else if (/\.(org|org\.[a-z]{2,})$/i.test(host)) { score += 14; authority += 14; reasons.push('organization domain'); }
+  if (discoveryCountryCode_(objective) && /\.(ug|ke|tz|rw|ng|gh|za|zm|zw|mw|et)$/i.test(host)) { score += 7; authority += 7; reasons.push('geographic domain match'); }
+  if (/(directory|directories|registry|register|association|member|members|listing|listings|providers|companies|businesses|firms|find|database)/i.test(path + ' ' + title)) { score += 13; reasons.push('directory/registry signal'); }
+  if (result.is_source_local || result.is_source_both) { score += 4; reasons.push('search provider local signal'); }
+
+  let matches = 0;
+  tokens.forEach(function (token) { if (hay.indexOf(token) >= 0) matches += 1; });
+  if (matches) { score += Math.min(22, matches * 4); reasons.push(matches + ' objective term matches'); }
+  if (queryHits > 1) { score += Math.min(10, queryHits * 2); reasons.push('found by multiple query variants'); }
+  if (/(facebook|instagram|linkedin|tiktok|youtube|x\.com|twitter|login|signin|signup|checkout|cart)/i.test(host + path)) { score -= 25; reasons.push('low-value/navigation signal'); }
+  if (/\.(pdf|jpg|jpeg|png|gif|zip|docx?|xlsx?|pptx?)($|\?)/i.test(url)) { score -= 30; reasons.push('non-HTML asset'); }
+
+  return { score: Math.max(0, Math.min(99, Math.round(score))), authority: Math.min(99, authority), reasons: reasons };
 }
 
-function getHostname_(url) {
-  const match = String(url || '').match(/^https?:\/\/([^\/]+)/i);
-  return match ? match[1].toLowerCase() : '';
+function searchBrave_(query, options) {
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('OCE_SEARCH_API_KEY');
+  if (!key) return [];
+  const country = String(options && options.country || '').toUpperCase();
+  const params = [
+    'q=' + encodeURIComponent(query),
+    'count=' + Math.min(20, Number(options && options.count) || OCE_DISCOVERY.RESULTS_PER_QUERY),
+    'search_lang=en',
+    'safesearch=moderate'
+  ];
+  if (country) params.push('country=' + encodeURIComponent(country));
+  const url = 'https://api.search.brave.com/res/v1/web/search?' + params.join('&');
+  const response = UrlFetchApp.fetch(url, {
+    method: 'get', muteHttpExceptions: true,
+    headers: { 'Accept': 'application/json', 'X-Subscription-Token': key }
+  });
+  if (response.getResponseCode() !== 200) throw Error('Brave Search returned HTTP ' + response.getResponseCode());
+  const data = JSON.parse(response.getContentText() || '{}');
+  return (data.web && data.web.results) || [];
 }
 
-function childText_(element, name) {
-  const child = element.getChild(name);
-  return child ? child.getText() : '';
+function searchWithConfiguredProvider_(objective, limit) {
+  const props = PropertiesService.getScriptProperties();
+  const provider = String(props.getProperty('OCE_SEARCH_PROVIDER') || OCE_DISCOVERY.PROVIDER).toUpperCase();
+  const key = props.getProperty('OCE_SEARCH_API_KEY');
+  if (!key) return [];
+  if (provider !== 'BRAVE') return [];
+
+  const queries = discoveryQueryVariants_(objective);
+  const country = discoveryCountryCode_(objective);
+  const byUrl = {};
+  const queryHits = {};
+  queries.forEach(function (query) {
+    try {
+      searchBrave_(query, { country: country, count: OCE_DISCOVERY.RESULTS_PER_QUERY }).forEach(function (r) {
+        const url = ouCanonicalUrl_(r.url);
+        if (!url || ouIsStaticAsset_(url) || OC_DENY_HOST.test(ouHostOf_(url))) return;
+        const path = url.replace(/^https?:\/\/[^\/]+/i, '');
+        if (/(^|\/)(login|log-in|signin|sign-in|signup|sign-up|checkout|cart)(\/|$)/i.test(path)) return;
+        const keyUrl = url.toLowerCase();
+        queryHits[keyUrl] = (queryHits[keyUrl] || 0) + 1;
+        byUrl[keyUrl] = {
+          title: String(r.title || url),
+          description: String(r.description || ''),
+          url: url,
+          is_source_local: Boolean(r.is_source_local),
+          is_source_both: Boolean(r.is_source_both),
+          queries: queryHits[keyUrl]
+        };
+      });
+    } catch (err) {
+      console.warn('OCE search provider failed for query: ' + query + ' — ' + String(err && err.message || err));
+    }
+  });
+
+  return Object.keys(byUrl).map(function (k) {
+    const r = byUrl[k];
+    const scored = scoreSearchCandidate_(r, objective, queryHits[k]);
+    return {
+      name: r.title.slice(0, 160),
+      url: r.url,
+      score: scored.score,
+      authority: scored.authority,
+      source_type: 'SEARCH_RESULT',
+      reason: 'search: BRAVE · ' + scored.reasons.join('; '),
+      description: r.description.slice(0, 500),
+      query_hits: queryHits[k]
+    };
+  }).sort(function (a, b) { return b.score - a.score; }).slice(0, Math.max(1, Math.min(limit || OCE_DISCOVERY.MAX_CANDIDATES, OCE_DISCOVERY.MAX_CANDIDATES)));
 }
 
-function escapeRegExp_(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function planDiscoverySeeds_(topic, options) {
+  const limit = Math.max(1, Math.min(OCE_DISCOVERY.DEFAULT_SEEDS, Number(options && options.limit) || OCE_DISCOVERY.DEFAULT_SEEDS));
+  const objective = String(topic || '').trim();
+  const catalog = discoveryCatalogSeeds_(objective, limit);
+  const searched = searchWithConfiguredProvider_(objective, OCE_DISCOVERY.MAX_CANDIDATES);
+  const merged = [];
+  const seen = {};
+
+  searched.concat(catalog).forEach(function (candidate) {
+    const canonical = ouCanonicalUrl_(candidate.url);
+    if (!canonical || seen[canonical]) return;
+    seen[canonical] = true;
+    merged.push(candidate);
+  });
+
+  return {
+    seeds: merged.sort(function (a, b) { return b.score - a.score; }).slice(0, limit),
+    via: searched.length ? (catalog.length ? 'search+catalog' : 'search') : (catalog.length ? 'catalog' : 'none'),
+    search_configured: Boolean(keyConfigured_()),
+    queries: discoveryQueryVariants_(objective)
+  };
 }
+
+function keyConfigured_() { return Boolean(PropertiesService.getScriptProperties().getProperty('OCE_SEARCH_API_KEY')); }
+
+function buildDiscoveryPlan(objective) { return planDiscoverySeeds_(objective, { limit: OCE_DISCOVERY.DEFAULT_SEEDS }); }
+function discoverSearchCandidates(objective) { return searchWithConfiguredProvider_(String(objective || ''), OCE_DISCOVERY.MAX_CANDIDATES); }
 
 function testDiscoveryIntelligence() {
-  const plan = buildDiscoveryPlan('Hospitals in Uganda');
+  const plan = planDiscoverySeeds_('Auditor firms in Uganda', { limit: 8 });
   console.log(JSON.stringify(plan, null, 2));
   return plan;
 }
