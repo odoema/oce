@@ -11,7 +11,7 @@ function doGet(e) {
     if (action === 'start_mission') {
       var topic = String(params.topic || '').trim();
       if (!topic) return gatewayJson_({ok:false,error:'Mission topic is required.'});
-      return gatewayJson_({ok:true,mission:startOceMission(topic)});
+      return gatewayJson_({ok:true,mission:startOceMissionIntelligent(topic)});
     }
 
     if (action === 'mission_status') {
@@ -41,7 +41,7 @@ function doGet(e) {
     if (action === 'discover') {
       var objective = String(params.objective || params.topic || '').trim();
       if (!objective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});
-      return gatewayJson_({ok:true,discovery:discoverSearchCandidates(objective)});
+      return gatewayJson_({ok:true,discovery:discoverSearchCandidatesSafe_(objective)});
     }
 
     if (action === 'queue_discovery') {
