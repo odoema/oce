@@ -1,0 +1,41 @@
+name: Deploy OCE Apps Script
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install clasp
+        run: npm install --global @google/clasp
+
+      - name: Prepare clasp project
+        env:
+          OCE_SCRIPT_ID: ${{ secrets.OCE_SCRIPT_ID }}
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$OCE_SCRIPT_ID" || { echo "Missing GitHub secret: OCE_SCRIPT_ID"; exit 1; }
+          test -n "$CLASPRC_JSON" || { echo "Missing GitHub secret: CLASPRC_JSON"; exit 1; }
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$OCE_SCRIPT_ID" > apps-script/.clasp.json
+
+      - name: Push Apps Script source
+        working-directory: apps-script
+        run: clasp push --force
+
+      - name: Redeploy existing web app
+        working-directory: apps-script
+        env:
+          OCE_DEPLOYMENT_ID: ${{ secrets.OCE_DEPLOYMENT_ID }}
+        run: |
+          test -n "$OCE_DEPLOYMENT_ID" || { echo "Missing GitHub secret: OCE_DEPLOYMENT_ID"; exit 1; }
+          clasp deploy --deploymentId "$OCE_DEPLOYMENT_ID" --description "OCE production deployment $GITHUB_SHA"
