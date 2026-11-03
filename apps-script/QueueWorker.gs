@@ -1,28 +1,54 @@
 /* OCE Queue Worker V1
- * LEGO block: persistent SOURCE_QUEUE -> controlled collection -> results.
- * It orchestrates the existing UrlScraper V2.0.0 function scrapeUrl_().
- *
- * Optional mission targeting is a routing improvement only. With no mission ID,
- * the original global queue behaviour is preserved exactly.
+ * LEGO block: persistent SOURCE_QUEUE -> collection -> usable extracted data.
+ * The crawler core remains intact; this adds durable contact/entity persistence.
  */
 
 const OCE_QUEUE_WORKER = {
-  VERSION: '1.0.0',
+  VERSION: '1.1.0',
   QUEUE_SHEET: 'SOURCE_QUEUE',
   REGISTRY_SHEET: 'SOURCE_REGISTRY',
   RESULTS_SHEET: 'SOURCE_RESULTS',
+  DATA_SHEET: 'OCE_DATA',
   MAX_BATCH: 10,
   LOCK_WAIT_MS: 30000
 };
 
+const OCE_RESULT_HEADERS = [
+  'result_id','queue_id','source_id','url','status','http_status','title','description',
+  'collected_at','collector_version','link_count','table_count','text_length','error',
+  'page_text','jsonld_json','tables_json','emails','phones','organization','address'
+];
+
+const OCE_DATA_HEADERS = [
+  'data_id','result_id','queue_id','source_id','source_url','status','collected_at',
+  'organization','email','phone','address','website','title','description','source_type',
+  'provenance','confidence','raw_text','jsonld_json','tables_json'
+];
+
 function setupQueueWorker() {
   const ss = getOceSpreadsheet_();
-  const sheet = ss.getSheetByName(OCE_QUEUE_WORKER.RESULTS_SHEET) || ss.insertSheet(OCE_QUEUE_WORKER.RESULTS_SHEET);
-  const headers = ['result_id','queue_id','source_id','url','status','http_status','title','description','collected_at','collector_version','link_count','table_count','text_length','error'];
-  if (sheet.getLastRow() === 0) sheet.getRange(1,1,1,headers.length).setValues([headers]);
+  const resultSheet = ss.getSheetByName(OCE_QUEUE_WORKER.RESULTS_SHEET) || ss.insertSheet(OCE_QUEUE_WORKER.RESULTS_SHEET);
+  ensureHeaders_(resultSheet, OCE_RESULT_HEADERS);
+
+  const dataSheet = ss.getSheetByName(OCE_QUEUE_WORKER.DATA_SHEET) || ss.insertSheet(OCE_QUEUE_WORKER.DATA_SHEET);
+  ensureHeaders_(dataSheet, OCE_DATA_HEADERS);
+  dataSheet.setFrozenRows(1);
+  return resultSheet.getName();
+}
+
+function ensureHeaders_(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else {
+    const existing = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0].map(String);
+    const missing = headers.filter(function(h) { return existing.indexOf(h) < 0; });
+    if (missing.length) {
+      const start = Math.max(sheet.getLastColumn(), 0) + 1;
+      sheet.getRange(1, start, 1, missing.length).setValues([missing]);
+    }
+  }
   sheet.setFrozenRows(1);
   sheet.getRange(1,1,1,headers.length).setFontWeight('bold');
-  return sheet.getName();
 }
 
 function runQueueWorker(limit, missionId) {
@@ -56,7 +82,7 @@ function processQueueItem_(item) {
     const saved = saveQueueResult_(item, result, 'COMPLETED', '');
     const discovered = queueDiscoveredLinks_(item, result);
     markSourceQueueStatus(item.queue_id, 'COMPLETED', '');
-    return {queue_id:item.queue_id,source_id:item.source_id,url:item.url,status:'COMPLETED',title:result.title || '',result_id:saved.result_id,discovered:discovered,started_at:started.toISOString()};
+    return {queue_id:item.queue_id,source_id:item.source_id,url:item.url,status:'COMPLETED',title:result.title || '',result_id:saved.result_id,discovered:discovered,started_at:started.toISOString(),emails:saved.email_count,phones:saved.phone_count};
   } catch (err) {
     const message = String(err.message || err);
     const blocked = /blocked|authentication|captcha|paywall|access-control|HTTP 401|HTTP 403/i.test(message);
@@ -68,8 +94,13 @@ function processQueueItem_(item) {
 }
 
 function saveQueueResult_(item, result, status, errorMessage) {
-  const sheet = getOceSpreadsheet_().getSheetByName(OCE_QUEUE_WORKER.RESULTS_SHEET);
+  setupQueueWorker();
+  const ss = getOceSpreadsheet_();
+  const sheet = ss.getSheetByName(OCE_QUEUE_WORKER.RESULTS_SHEET);
   const resultId = Utilities.getUuid();
+  const extracted = result ? extractOceData_(result) : {emails:[],phones:[],organization:'',address:'',website:'',confidence:0};
+  const sourceRecord = findSourceById_(ss.getSheetByName(OCE_QUEUE_WORKER.REGISTRY_SHEET), item.source_id) || {};
+
   sheet.appendRow([
     resultId,item.queue_id,item.source_id,item.url,status,'',
     result ? String(result.title || '') : '',
@@ -79,9 +110,78 @@ function saveQueueResult_(item, result, status, errorMessage) {
     result && Array.isArray(result.links) ? result.links.length : 0,
     result && Array.isArray(result.tables) ? result.tables.length : 0,
     result ? String(result.text || '').length : 0,
-    errorMessage || ''
+    errorMessage || '',
+    result ? String(result.text || '') : '',
+    result ? safeJson_(result.jsonld || []) : '',
+    result ? safeJson_(result.tables || []) : '',
+    extracted.emails.join('; '),
+    extracted.phones.join('; '),
+    extracted.organization,
+    extracted.address
   ]);
-  return {result_id:resultId};
+
+  if (result) {
+    saveOceData_(item, result, resultId, extracted, sourceRecord);
+  }
+  return {result_id:resultId,email_count:extracted.emails.length,phone_count:extracted.phones.length};
+}
+
+function saveOceData_(item, result, resultId, extracted, sourceRecord) {
+  const sheet = getOceSpreadsheet_().getSheetByName(OCE_QUEUE_WORKER.DATA_SHEET);
+  const dataId = Utilities.getUuid();
+  sheet.appendRow([
+    dataId,resultId,item.queue_id,item.source_id,item.url,'COMPLETED',
+    result.collected_at || new Date(),
+    extracted.organization,extracted.emails.join('; '),extracted.phones.join('; '),
+    extracted.address,extracted.website,String(result.title || ''),String(result.description || ''),
+    String(sourceRecord.source_type || ''),String(item.source || 'QUEUE_WORKER'),
+    extracted.confidence,String(result.text || ''),safeJson_(result.jsonld || []),safeJson_(result.tables || [])
+  ]);
+}
+
+function extractOceData_(result) {
+  const text = String(result.text || '');
+  const jsonld = Array.isArray(result.jsonld) ? result.jsonld : [];
+  const haystack = text + '\n' + safeJson_(jsonld);
+  const emails = unique_(haystack.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig) || [])
+    .map(function(v){ return v.toLowerCase(); })
+    .filter(function(v){ return !/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(v); });
+  const phones = unique_(haystack.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [])
+    .map(normalizePhone_)
+    .filter(function(v){ return v.length >= 9 && v.length <= 20; });
+
+  let organization = '';
+  let address = '';
+  let website = String(result.source_url || '');
+  jsonld.some(function(obj) {
+    if (!obj || typeof obj !== 'object') return false;
+    if (!organization && obj.name) organization = String(obj.name).trim();
+    if (!address && obj.address) {
+      if (typeof obj.address === 'string') address = obj.address;
+      else if (obj.address.streetAddress || obj.address.addressLocality || obj.address.addressRegion) {
+        address = [obj.address.streetAddress,obj.addressLocality,obj.addressRegion,obj.address.addressCountry].filter(Boolean).join(', ');
+      }
+    }
+    if (obj.url) website = String(obj.url);
+    return !!(organization && address);
+  });
+  if (!organization) organization = String(result.title || '').replace(/\s*[|–-]\s*.*$/, '').trim();
+
+  const confidence = Math.min(100, 30 + (emails.length ? 30 : 0) + (phones.length ? 25 : 0) + (organization ? 10 : 0) + (address ? 5 : 0));
+  return {emails:emails,phones:phones,organization:organization,address:address,website:website,confidence:confidence};
+}
+
+function normalizePhone_(value) {
+  return String(value || '').replace(/\s+/g,' ').trim().replace(/[.,;:]+$/,'');
+}
+
+function unique_(arr) {
+  const seen = {};
+  return arr.filter(function(v){ const k=String(v).toLowerCase(); if(seen[k]) return false; seen[k]=true; return true; });
+}
+
+function safeJson_(value) {
+  try { return JSON.stringify(value); } catch (_) { return ''; }
 }
 
 function queueWorkerStatus() {
