@@ -34,6 +34,10 @@ function doGet(e) {
       return gatewayJson_({ok:true,queue:getOceGlobalQueuePage(globalQueuePage,globalQueuePageSize)});
     }
 
+    if (action === 'queue_stats') {
+      return gatewayJson_({ok:true,stats:getOceGlobalQueueStats()});
+    }
+
     if (action === 'discover') {
       var objective = String(params.objective || params.topic || '').trim();
       if (!objective) return gatewayJson_({ok:false,error:'Discovery objective is required.'});

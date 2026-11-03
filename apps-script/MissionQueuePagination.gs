@@ -4,7 +4,7 @@
  */
 
 const OCE_QUEUE_PAGE = {
-  VERSION: '1.0.0',
+  VERSION: '1.0.1',
   DEFAULT_SIZE: 25,
   MAX_SIZE: 100
 };
@@ -26,6 +26,20 @@ function getOceGlobalQueuePage(page, pageSize) {
   return getOceQueuePageInternal_(function() {
     return true;
   }, '', page, pageSize);
+}
+
+function getOceGlobalQueueStats() {
+  const id = PropertiesService.getScriptProperties().getProperty(OCE_SOURCE_REGISTRY.SPREADSHEET_PROPERTY);
+  if (!id) return { total: 0, queued: 0, scraping: 0, completed: 0, failed: 0, blocked: 0, skipped: 0, cancelled: 0 };
+  const queue = getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
+  const out = { total: 0, queued: 0, scraping: 0, completed: 0, failed: 0, blocked: 0, skipped: 0, cancelled: 0 };
+  if (!queue || queue.getLastRow() < 2) return out;
+  queue.getRange(2, 5, queue.getLastRow() - 1, 1).getValues().forEach(function(r) {
+    out.total += 1;
+    const status = String(r[0] || '').toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(out, status)) out[status] += 1;
+  });
+  return out;
 }
 
 function getOceQueuePageInternal_(filterFn, missionId, page, pageSize) {
