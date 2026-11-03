@@ -29,7 +29,8 @@ function getOceGlobalQueuePage(page, pageSize) {
 }
 
 function getOceGlobalQueueStats() {
-  if (!oceIsInitialized_()) return { total: 0, queued: 0, scraping: 0, completed: 0, failed: 0, blocked: 0, skipped: 0, cancelled: 0 };
+  const id = PropertiesService.getScriptProperties().getProperty(OCE_SOURCE_REGISTRY.SPREADSHEET_PROPERTY);
+  if (!id) return { total: 0, queued: 0, scraping: 0, completed: 0, failed: 0, blocked: 0, skipped: 0, cancelled: 0 };
   const queue = getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
   const out = { total: 0, queued: 0, scraping: 0, completed: 0, failed: 0, blocked: 0, skipped: 0, cancelled: 0 };
   if (!queue || queue.getLastRow() < 2) return out;
