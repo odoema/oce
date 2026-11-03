@@ -110,6 +110,23 @@ function renderQueuePager(pageData) {
   pager.querySelector('#oceQueuePageSize').value = String(oceQueuePageSize);
 }
 
+async function loadGlobalQueueStats() {
+  try {
+    const payload = await missionApi('queue_stats');
+    const stats = payload.stats || {};
+    const total = Number(stats.total || 0);
+    const active = Number(stats.queued || 0) + Number(stats.scraping || 0);
+    const done = Number(stats.completed || 0);
+    const issues = Number(stats.failed || 0) + Number(stats.blocked || 0);
+    if (scout$('scoutQueueCount')) scout$('scoutQueueCount').textContent = String(total);
+    if (scout$('scoutQueuedCount')) scout$('scoutQueuedCount').textContent = String(active);
+    if (scout$('scoutDoneCount')) scout$('scoutDoneCount').textContent = String(done);
+    if (scout$('scoutFailedCount')) scout$('scoutFailedCount').textContent = String(issues);
+  } catch (_) {
+    // Queue rows remain usable even if the optional aggregate endpoint is unavailable.
+  }
+}
+
 async function loadMissionQueuePage(page) {
   const requestedPage = Math.max(1, Number(page || 1));
   const serial = ++oceQueueRequestSerial;
@@ -208,8 +225,6 @@ async function startPersistentMission() {
     renderMission(mission);
     await loadMissionQueuePage(1);
 
-    // Kick the first controlled collection immediately for this mission.
-    // The scheduled worker remains responsible for continued global processing.
     fetch(missionApiUrl('run_worker', { limit: '1', mission_id: oceMissionId }), { cache: 'no-store' }).catch(() => {});
 
     oceMissionTimer = setInterval(pollMission, OCE_MISSION_POLL_MS);
@@ -245,8 +260,7 @@ function initMissionControl() {
     }).catch(error => scoutSetStatus(String(error.message || error)));
   };
 
-  // The queue exists independently of the browser's current mission state.
-  // Load it immediately so the operator can see the live persistent queue.
+  loadGlobalQueueStats();
   loadMissionQueuePage(1);
 }
 
