@@ -4,13 +4,14 @@
  */
 
 const OCE_SOURCE_REGISTRY = {
-  VERSION: '2.1.0',
+  VERSION: '2.1.1',
   REGISTRY_SHEET: 'SOURCE_REGISTRY',
   QUEUE_SHEET: 'SOURCE_QUEUE',
   RUNS_SHEET: 'SCOUT_RUNS',
   SPREADSHEET_PROPERTY: 'OCE_SPREADSHEET_ID',
   SPREADSHEET_NAME: 'OCE — Source Intelligence Data',
-  MAX_QUEUE: 10000
+  // 0 means no artificial OCE queue ceiling. Physical Sheets/Apps Script quotas still apply.
+  MAX_QUEUE: 0
 };
 
 function setupSourceRegistry() {
@@ -77,7 +78,7 @@ function enqueueRegisteredSource(sourceId,priority){
   if(!registry||!queue)throw Error('Source Registry is not initialized.');
   const source=findSourceById_(registry,sourceId);
   if(!source)throw Error('Source not found: '+sourceId);
-  if(queue.getLastRow()-1>=OCE_SOURCE_REGISTRY.MAX_QUEUE)throw Error('Source queue capacity reached.');
+  if(OCE_SOURCE_REGISTRY.MAX_QUEUE > 0 && queue.getLastRow()-1>=OCE_SOURCE_REGISTRY.MAX_QUEUE)throw Error('Source queue capacity reached.');
   const existing=findAnyQueuedSource_(queue,source.source_id);
   if(existing)return{queue_id:existing.queue_id,status:'ALREADY_PRESENT'};
   const queueId=Utilities.getUuid();
@@ -91,7 +92,8 @@ function registerAndQueueSource(source){const registered=registerDiscoveredSourc
 function getSourceQueue(limit, missionId){
   const sheet=getOceSpreadsheet_().getSheetByName(OCE_SOURCE_REGISTRY.QUEUE_SHEET);
   if(!sheet||sheet.getLastRow()<2)return[];
-  const max=Math.min(Number(limit||100),OCE_SOURCE_REGISTRY.MAX_QUEUE);
+  const requested=Math.max(1, Number(limit||100));
+  const max=OCE_SOURCE_REGISTRY.MAX_QUEUE > 0 ? Math.min(requested,OCE_SOURCE_REGISTRY.MAX_QUEUE) : requested;
   const targetMission=String(missionId||'').trim();
   return sheet.getRange(2,1,sheet.getLastRow()-1,11).getValues()
     .filter(function(r){
