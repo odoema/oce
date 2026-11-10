@@ -28,15 +28,15 @@ const OCE_DATA_HEADERS = [
 function setupQueueWorker() {
   const ss = getOceSpreadsheet_();
   const resultSheet = ss.getSheetByName(OCE_QUEUE_WORKER.RESULTS_SHEET) || ss.insertSheet(OCE_QUEUE_WORKER.RESULTS_SHEET);
-  ensureHeaders_(resultSheet, OCE_RESULT_HEADERS);
+  ensureAppendHeaders_(resultSheet, OCE_RESULT_HEADERS);
 
   const dataSheet = ss.getSheetByName(OCE_QUEUE_WORKER.DATA_SHEET) || ss.insertSheet(OCE_QUEUE_WORKER.DATA_SHEET);
-  ensureHeaders_(dataSheet, OCE_DATA_HEADERS);
+  ensureAppendHeaders_(dataSheet, OCE_DATA_HEADERS);
   dataSheet.setFrozenRows(1);
   return resultSheet.getName();
 }
 
-function ensureHeaders_(sheet, headers) {
+function ensureAppendHeaders_(sheet, headers) {
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   } else {
@@ -147,7 +147,7 @@ function extractOceData_(result) {
     .map(function(v){ return v.toLowerCase(); })
     .filter(function(v){ return !/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(v); });
   const phones = unique_(haystack.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [])
-    .map(normalizePhone_)
+    .map(normalizeCollectedPhone_)
     .filter(function(v){ return v.length >= 9 && v.length <= 20; });
 
   let organization = '';
@@ -171,7 +171,7 @@ function extractOceData_(result) {
   return {emails:emails,phones:phones,organization:organization,address:address,website:website,confidence:confidence};
 }
 
-function normalizePhone_(value) {
+function normalizeCollectedPhone_(value) {
   return String(value || '').replace(/\s+/g,' ').trim().replace(/[.,;:]+$/,'');
 }
 
