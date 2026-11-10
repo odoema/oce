@@ -61,10 +61,10 @@ function registerDiscoveredSource(source){
   const now=new Date();
   const record=[
     existing?existing.source_id:Utilities.getUuid(),canonical,canonical,sourceDomain_(canonical),
-    clean_(source.source_type),clean_(source.topic),clean_(source.label),Number(source.priority||0),
+    cleanSourceText_(source.source_type),cleanSourceText_(source.topic),cleanSourceText_(source.label),Number(source.priority||0),
     existing?existing.discovered_at:(source.discovered_at||now),existing?existing.last_scanned_at:'',
     existing?existing.last_status:'DISCOVERED',existing?existing.http_status:'',existing?existing.scan_count:0,
-    existing?existing.queue_status:'NOT_QUEUED',existing?existing.provenance:clean_(source.provenance||'SOURCE_SCOUT'),clean_(source.notes)
+    existing?existing.queue_status:'NOT_QUEUED',existing?existing.provenance:cleanSourceText_(source.provenance||'SOURCE_SCOUT'),cleanSourceText_(source.notes)
   ];
   if(existing){sheet.getRange(existing.row,1,1,record.length).setValues([record]);return{source_id:record[0],status:'UPDATED',row:existing.row};}
   sheet.appendRow(record);
@@ -148,7 +148,7 @@ function findAnyQueuedSource_(sheet,sourceId){if(sheet.getLastRow()<2)return nul
 function updateRegistryQueueStatus_(sheet,row,status){sheet.getRange(row,14).setValue(status||'NOT_QUEUED');}
 function sourceCanonicalUrl_(value){let url=String(value||'').trim();if(!/^https?:\/\//i.test(url))return '';url=url.replace(/#.*$/,'').replace(/\?.*$/,'');if(url.length>2048)return '';return url.replace(/\/$/,'')||url;}
 function sourceDomain_(url){const match=String(url).match(/^https?:\/\/([^\/]+)/i);return match?match[1].toLowerCase():'';}
-function clean_(value){return String(value==null?'':value).trim();}
+function cleanSourceText_(value){return String(value==null?'':value).trim();}
 
 function testSourceRegistry(){setupSourceRegistry();const source={url:'https://example.com/',source_type:'WEBSITE',topic:'TEST',label:'Example Domain',priority:100,provenance:'MANUAL_TEST'};const result=registerAndQueueSource(source);Logger.log(JSON.stringify(result,null,2));return result;}
 function testGetSourceQueue(){const result=getSourceQueue(10);Logger.log(JSON.stringify(result,null,2));return result;}
