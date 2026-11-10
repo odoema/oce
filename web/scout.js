@@ -87,7 +87,7 @@ function scoutScore(url, topic, label) {
 }
 
 function scoutParseManualSeeds() {
-  return String(scout$('scoutSeeds').value || '')
+  return String((scout$('scoutSeeds') || {}).value || '')
     .replace(/\\n/g, '\n')
     .split(/[\r\n,]+/)
     .map(scoutNormalizeUrl)
