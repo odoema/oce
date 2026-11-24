@@ -141,7 +141,12 @@
       return connectFlow(true);
     }
     let d = null;
-    try { d = await api('dashboard'); setConn(true, d); } catch (e) { /* show menu anyway */ }
+    try { d = await api('dashboard'); setConn(true, d); } catch (e) {
+      if (e.message === NOT_CONNECTED) {
+        await say(`${hello}! 👋 This browser isn't connected to your OCE yet. Let's fix that in a moment.`);
+        return connectFlow(true);
+      }
+    }
     const waiting = d ? d.candidates.pending : 0;
     await say(`${hello}! 👋 What would you like to do?` + (waiting ? `<br><small>📬 ${num(waiting)} contact${waiting > 1 ? 's are' : ' is'} waiting for your review.</small>` : ''), { quick: true });
     const pick = await ask({
@@ -174,20 +179,12 @@
 
   /* ------------------------------------------------ connect */
   async function connectFlow(firstTime) {
-    let url = store.endpoint;
-    const reuse = url && /\/exec$/.test(url)
-      ? await ask({ chips: [{ label: 'Use the saved address', value: 'keep', primary: true }, { label: 'Paste a new one', value: 'new' }], input: false })
-      : 'new';
-    if (reuse === 'new') {
-      await say('Paste your <b>web app address</b>. It starts with https://script.google.com and ends with <code>/exec</code>.');
-      for (;;) {
-        url = String(await ask({ placeholder: 'https://script.google.com/macros/s/…/exec' })).trim();
-        if (/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) break;
-        await say('Hmm, that doesn\'t look right. It should start with <code>https://script.google.com</code> and end with <code>/exec</code>. Try again?');
-      }
-    }
-    await say('Now your <b>API key</b>. It stays in this browser only. (Lost it? In the Apps Script editor, run <code>oceShowApiKey</code>.)');
-    const key = String(await ask({ input: 'password', placeholder: 'Paste your API key' })).trim();
+    const url = DEFAULT_ENDPOINT;
+    await say('The quickest way: on a browser or phone that is already connected, open <b>Settings → Connect another browser or phone</b>, tap <b>Copy link</b>, and open that link here. That\'s it.');
+    await say('No other device handy? Paste your <b>API key</b> instead. It stays in this browser only. (Lost it? In the Apps Script editor, run <code>oceShowApiKey</code>.)');
+    let key = String(await ask({ input: 'password', placeholder: 'Paste your API key (or the connect link)' })).trim();
+    const fromLink = key.match(/connect=([A-Za-z0-9_-]{16,200})/);
+    if (fromLink) key = decodeURIComponent(fromLink[1]);
     store.save(url, key);
     await say('Checking…', { quick: true });
     try {

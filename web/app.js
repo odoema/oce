@@ -17,8 +17,22 @@ const safeUrl = (u) => (/^https?:\/\//i.test(String(u)) ? esc(u) : '#');
 const short = (u, n = 70) => { const s = String(u || '').replace(/^https?:\/\//, ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
 /* ------------------------------------------------------------------ API */
+/* A browser may remember an address from an older deployment. Check it once per page load and
+   quietly switch to the current deployment if the saved one is not a working OCE 2.x. */
+let endpointCheck = null;
+function ensureEndpoint() {
+  if (store.endpoint === DEFAULT_ENDPOINT) return Promise.resolve();
+  if (!endpointCheck) {
+    endpointCheck = fetch(store.endpoint + '?action=health', { cache: 'no-store', redirect: 'follow' })
+      .then((r) => r.json()).then((j) => { if (!(j && j.ok && /^2\./.test(String(j.data && j.data.version)))) throw new Error('old'); })
+      .catch(() => { localStorage.setItem('oce.endpoint', DEFAULT_ENDPOINT); });
+  }
+  return endpointCheck;
+}
+const NOT_CONNECTED = 'This browser is not connected yet. Open your connect link on this device (Settings → Connect another browser or phone, on a browser that is already connected), or paste the API key in Settings.';
 async function api(action, params = {}, method = 'GET') {
-  if (!store.key) throw new Error('Not connected. Open Settings and add the web app URL and API key.');
+  if (!store.key) throw new Error(NOT_CONNECTED);
+  await ensureEndpoint();
   let res;
   if (method === 'GET') {
     const qs = new URLSearchParams({ action, key: store.key });
@@ -34,7 +48,10 @@ async function api(action, params = {}, method = 'GET') {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch (e) { throw new Error('The web app did not return JSON. Check the URL and that it is deployed for "Anyone".'); }
-  if (!data.ok) throw new Error(data.error || 'Request failed');
+  if (!data.ok) {
+    if (/Unauthorized/i.test(data.error || '')) { setConn(false); throw new Error(NOT_CONNECTED); }
+    throw new Error(data.error || 'Request failed');
+  }
   return data.data;
 }
 const post = (action, params) => api(action, params, 'POST');
@@ -85,7 +102,7 @@ function setConn(ok, dash) {
 function renderSetupNotice() {
   const n = $('setupNotice');
   n.classList.remove('hidden');
-  n.innerHTML = 'OCE is not connected. Go to <a href="#settings" data-go="settings">Settings</a> and paste your web app URL and API key (run <code>oceSetup()</code> in the Apps Script editor to get them).';
+  n.innerHTML = 'This browser is not connected yet. The quickest way: on a browser that is already connected, open <b>Settings → Connect another browser or phone</b>, copy the link and open it here. Or paste the API key in <a href="#settings" data-go="settings">Settings</a>.';
   n.querySelector('[data-go]').addEventListener('click', (e) => { e.preventDefault(); show('settings'); });
 }
 
@@ -444,6 +461,28 @@ function pager(el, d, go) {
   el.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.p))));
 }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+/* One-click connect: a link ending in #connect=<API key>. The part after # never leaves the browser
+   (it is not sent to any server); it is saved here and removed from the address bar at once. */
+(function claimConnectLink() {
+  const m = location.hash.match(/connect=([A-Za-z0-9_-]{16,200})/);
+  if (!m) return;
+  store.save(DEFAULT_ENDPOINT, m[1]);
+  history.replaceState(null, '', location.pathname + location.search + '#overview');
+  setTimeout(() => api('dashboard').then((d) => { setConn(true, d); toast('🎉 This browser is connected. Welcome!'); })
+    .catch((e) => toast(e.message, 'err')), 50);
+})();
+function connectLink() { return location.origin + location.pathname.replace(/[^/]*$/, '') + '#connect=' + encodeURIComponent(store.key); }
+$('shareShow').addEventListener('click', () => {
+  if (!store.key) return toast(NOT_CONNECTED, 'err');
+  $('shareLink').value = connectLink();
+  $('shareBox').classList.toggle('hidden');
+});
+$('shareCopy').addEventListener('click', async () => {
+  $('shareLink').value = connectLink();
+  try { await navigator.clipboard.writeText($('shareLink').value); toast('Link copied. Open it on the other browser or phone.'); }
+  catch (e) { $('shareLink').select(); toast('Select the link and copy it (Ctrl+C).', 'warn'); }
+});
 
 show(views.includes(location.hash.slice(1)) ? location.hash.slice(1) : (store.key ? 'overview' : 'settings'));
 // Keep the sidebar badges (mode, pending reviews) current regardless of the opening view.
