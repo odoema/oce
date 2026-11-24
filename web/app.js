@@ -97,7 +97,6 @@ async function loadOverview() {
     $('setupNotice').classList.add('hidden');
     const warnings = [];
     if (d.automation.legacy_triggers) warnings.push(d.automation.legacy_triggers + ' old v1 trigger(s) still installed — run oceSetup() once to remove them.');
-    if (!d.search_configured) warnings.push('Search API key not set: discovery uses Bing RSS and the curated catalogue. Add OCE_SEARCH_API_KEY (Brave) for much better coverage.');
     if (warnings.length) { $('setupNotice').classList.remove('hidden'); $('setupNotice').innerHTML = warnings.map(esc).join('<br>'); }
     const k = [
       ['Running missions', d.missions.running, `${num(d.missions.total)} total`],
@@ -140,7 +139,7 @@ $('previewDiscovery').addEventListener('click', (e) => guard(async () => {
   const d = await api('discover.preview', { objective, limit: 12 });
   const box = $('discoveryPreview');
   box.classList.remove('hidden');
-  box.innerHTML = `<p class="muted">Via ${esc(d.via)}${d.search_configured ? '' : ' (no search API key)'} · ${d.seeds.length} sources</p>` +
+  box.innerHTML = `<p class="muted">Via ${esc(d.via)} · ${d.seeds.length} sources</p>` +
     (d.seeds.length ? `<ul class="seed-list">${d.seeds.map((s) => `<li><b>${esc(s.score)}</b> <a href="${safeUrl(s.url)}" target="_blank" rel="noopener noreferrer">${esc(short(s.url, 80))}</a><small>${esc(s.reason || s.source_type)}</small></li>`).join('')}</ul>` : '<p>No sources found — add starting URLs under Options.</p>');
 }, e.currentTarget));
 

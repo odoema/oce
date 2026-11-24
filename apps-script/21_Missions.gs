@@ -12,7 +12,7 @@ function oceCreateMission_(objective, opts) {
   objective = oceClean_(objective, 300);
   if (!objective) throw new Error('Mission objective is required.');
   var manual = (opts.seeds || []).map(function (u) { return oceCanonicalUrl_(/^https?:\/\//i.test(u) ? u : 'https://' + u); }).filter(Boolean);
-  var discovery = opts.skip_discovery ? { seeds: [], via: 'manual', queries: [] } : oceDiscover_(objective, opts.seed_limit || 10);
+  var discovery = opts.skip_discovery ? { seeds: [], via: 'manual', queries: [] } : oceDiscover_(objective, opts.seed_limit || 20);
   var seeds = manual.map(function (u) { return { url: u, name: 'Manual seed', score: 90, source_type: 'MANUAL_SEED' }; }).concat(discovery.seeds);
   var now = new Date();
   var mission = oceTable_('MISSIONS').append([{
@@ -22,7 +22,7 @@ function oceCreateMission_(objective, opts) {
     same_site: opts.same_site === undefined ? oceSettingBool_('CRAWL_SAME_SITE', true) : !!opts.same_site,
     seed_count: seeds.length, pages_total: 0, pages_done: 0, pages_failed: 0, pages_skipped: 0, candidates_found: 0,
     progress: 0, discovery_via: opts.skip_discovery ? 'manual' : (manual.length ? 'manual+' : '') + discovery.via,
-    notes: seeds.length ? '' : 'No public starting sources found. Add manual seed URLs or configure OCE_SEARCH_API_KEY.'
+    notes: seeds.length ? '' : 'No public starting sources found. Try a broader objective (e.g. "Banks in Uganda") or add starting website addresses.'
   }])[0];
   if (seeds.length) {
     var res = oceEnqueue_(mission, seeds.map(function (s) {

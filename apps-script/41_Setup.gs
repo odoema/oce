@@ -22,7 +22,6 @@ function oceSetup() {
     next_steps: [
       'Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone). Copy the /exec URL.',
       'Open the dashboard, paste the web app URL and the API key above into Settings.',
-      'Optional: add OCE_SEARCH_API_KEY (Brave Search) in Project Settings > Script Properties for better discovery.',
       'Before any real sending: set SENDER_POSTAL_ADDRESS, DEFAULT_FROM_EMAIL, RESEND_API_KEY, OCE_TEST_RECIPIENT and send a test.'
     ]
   };
@@ -68,7 +67,7 @@ function oceHealthCheck() {
   add('API key', !!oceSecret_('OCE_API_KEY'));
   add('Signing secret', !!oceSecret_('OCE_SIGNING_SECRET'));
   add('Web app URL', !!oceUnsubscribeBaseUrl_(), oceUnsubscribeBaseUrl_());
-  add('Search provider key', !!oceSecret_('OCE_SEARCH_API_KEY'), 'optional; Bing RSS + catalogue used otherwise');
+  add('Discovery', true, oceSecret_('OCE_SEARCH_API_KEY') ? 'Brave + free open data + catalogue' : 'free open data (Wikipedia/Wikidata) + catalogue; no key needed');
   add('Automation', true, JSON.stringify(oceAutomationStatus_()));
   add('Legacy triggers removed', oceAutomationStatus_().legacy_triggers === 0);
   var mode = oceSetting_('DELIVERY_MODE', 'DRY_RUN');
