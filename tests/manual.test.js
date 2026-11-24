@@ -103,6 +103,14 @@ test('assistant logic: objectives, intents and answers behave', () => {
   ['start', 'b2b', 'customer'].forEach((k) => assert.ok(G.BASIS[G.BASIS[k].yes] && G.BASIS[G.BASIS[k].no], 'basis tree ' + k));
 });
 
+test('PDF reading: the Drive advanced service is declared (enables the Drive API) and scopes stay narrow', () => {
+  const m = JSON.parse(read('apps-script/appsscript.json'));
+  const svc = (m.dependencies && m.dependencies.enabledAdvancedServices) || [];
+  assert.ok(svc.some((s) => s.serviceId === 'drive'), 'Drive advanced service declared');
+  assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/drive.file'));
+  assert.ok(!m.oauthScopes.includes('https://www.googleapis.com/auth/drive'), 'no full-Drive scope');
+});
+
 test('help page scripts parse and the guide loads with no browser errors', () => {
   ['web/help.js', 'web/assistant.js', 'web/guide-logic.js'].forEach((f) => new vm.Script(read(f), { filename: f }));
   assert.ok(read('web/help.html').includes('manual.js') && read('web/index.html').includes('help.html'), 'dashboard links to the guide');

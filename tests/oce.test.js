@@ -721,3 +721,40 @@ test('noindex pages keep no contact data; nofollow stops link-following; X-Robot
   assert.equal(resA.emails, '');
   assert.match(resA.error, /^noindex/);
 });
+
+test('PDF lists: address lines are not names, phones stay inside their own entry, registers of numbers give no contacts', () => {
+  const rt = setupRuntime();
+  const text = [
+    'Ärzte und Kliniken in Uganda',
+    'Aga Khan Clinic (private Poliklinik)',
+    'Acacia Mall, Kisementi, Kampala',
+    'Tel: +256 414 343 566',
+    'E-Mail: acacia.reception@aku.edu',
+    'DRF Luftrettung e.V. Stuttgart',
+    'Tel.: +49 711 7007-0',
+    'E-Mail: info@drf-luftrettung.de',
+    'MAF, (Mission Aviation Fellowship Uganda),',
+    'Kajansi Airfield',
+    'Tel: +256 772 222 333',
+    'E-Mail: uga.bookings@maf-int.org',
+    'International Medical Centre',
+    'Nyonyi Garden, Kololo',
+    'Tel: 0393 200 401',
+    'E-Mail: imc@img.co.ug'
+  ].join('\n');
+  rt.on('https://emb.example.de/list.pdf', { status: 200, headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from('%PDF') });
+  mountDrive(rt, text);
+  rt.fresh();
+  const by = Object.fromEntries(plain(rt.ctx.oceScanUrl_('https://emb.example.de/list.pdf').candidates).map((c) => [c.email, c]));
+  assert.equal(by['acacia.reception@aku.edu'].organization, 'Aga Khan Clinic (private Poliklinik)');
+  assert.ok(/Mission Aviation Fellowship/.test(by['uga.bookings@maf-int.org'].organization), 'not the airfield: ' + by['uga.bookings@maf-int.org'].organization);
+  assert.equal(by['uga.bookings@maf-int.org'].phone, '+256772222333', 'phone from its own entry, not the German one above');
+  assert.equal(by['imc@img.co.ug'].organization, 'International Medical Centre', 'not the address line');
+  assert.ok(!/Kampala|Kololo|Airfield/.test(Object.values(by).map((c) => c.organization).join('|')));
+
+  const rt2 = setupRuntime();
+  rt2.on('https://reg.example.org/firms.pdf', { status: 200, headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from('%PDF') });
+  mountDrive(rt2, 'List of Firms\nFirm No. 130184025 Alpha & Co\nFirm No. 130184026 Beta Associates');
+  rt2.fresh();
+  assert.equal(rt2.ctx.oceScanUrl_('https://reg.example.org/firms.pdf').candidates.length, 0, 'registration numbers are not phone contacts');
+});

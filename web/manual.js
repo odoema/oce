@@ -11,10 +11,11 @@
  * See docs/manual.md for how to update it.
  */
 window.OCE_MANUAL = {
-  version: '2.3.0',
+  version: '2.3.1',
   updated: '2026-11-24',
 
   whatsNew: {
+    '2.3.1': ['PDF reading switched on: OCE now enables Google Drive\'s converter for itself, so PDF lists work without any setup.'],
     '2.3.0': [
       'OCE now reads PDFs: member lists, directories and registers published as PDF files, including scanned ones. Each entry keeps its own organisation name and phone.',
       'PDF links that look like member or firm lists are visited first. Try "Inspect a single page" with a PDF link.'
@@ -190,7 +191,7 @@ window.OCE_MANUAL = {
 
   /* Every key of OCE_DEFAULT_SETTINGS, with its default and a plain explanation. */
   settings: [
-    { key: 'VERSION', def: '2.3.0', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
+    { key: 'VERSION', def: '2.3.1', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
     { key: 'TIMEZONE', def: 'Africa/Kampala', plain: 'Clock used for sending hours and dates.', group: 'System' },
     { key: 'DEFAULT_COUNTRY_CODE', def: '256', plain: 'Turns 0772… into +256772….', group: 'System' },
     { key: 'CRAWL_ENABLED', def: 'TRUE', plain: 'Master switch for finding and collecting.', group: 'Finding' },
