@@ -3,6 +3,9 @@ name: Deploy OCE Apps Script
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -13,7 +16,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
+
+      - name: Check and test before deploying
+        run: |
+          npm run check
+          npm test
 
       - name: Install clasp
         run: npm install --global @google/clasp
@@ -26,16 +34,18 @@ jobs:
           test -n "$OCE_SCRIPT_ID" || { echo "Missing GitHub secret: OCE_SCRIPT_ID"; exit 1; }
           test -n "$CLASPRC_JSON" || { echo "Missing GitHub secret: CLASPRC_JSON"; exit 1; }
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$OCE_SCRIPT_ID" > apps-script/.clasp.json
+          printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$OCE_SCRIPT_ID" > .clasp.json
 
+      # --force replaces the project's files with exactly the ones in apps-script/ (v1 files are removed).
       - name: Push Apps Script source
-        working-directory: apps-script
         run: clasp push --force
 
-      - name: Redeploy existing web app
-        working-directory: apps-script
+      - name: Redeploy existing web app (keeps the same /exec URL)
         env:
           OCE_DEPLOYMENT_ID: ${{ secrets.OCE_DEPLOYMENT_ID }}
         run: |
           test -n "$OCE_DEPLOYMENT_ID" || { echo "Missing GitHub secret: OCE_DEPLOYMENT_ID"; exit 1; }
-          clasp deploy --deploymentId "$OCE_DEPLOYMENT_ID" --description "OCE production deployment $GITHUB_SHA"
+          clasp deploy --deploymentId "$OCE_DEPLOYMENT_ID" --description "OCE ${GITHUB_SHA::7}"
+
+      - name: Reminder
+        run: echo "Now run oceSetup() once in the Apps Script editor to migrate data and remove the old every-minute triggers."

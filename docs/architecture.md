@@ -1,71 +1,57 @@
-# OCE Architecture
+# Architecture
 
-OCE (Odoch Campaign Engine) uses Google Sheets as the operational data layer and Google Apps Script as the orchestration layer.
-
-## Source discovery and collection flow
+OCE uses Google Sheets as its data layer, Google Apps Script for logic and scheduling, and a static web dashboard for operators.
 
 ```text
-Seed URLs / reviewed discovery
-        ↓
-Source Scout V1
-        ↓
-Normalize + Deduplicate + Priority Score
-        ↓
-SOURCE_REGISTRY
-        ↓
-SOURCE_QUEUE
-        ↓
-Existing CollectorGateway / UrlScraper
-        ↓
-Source Intelligence
-        ↓
-Contact Intelligence
-        ↓
-Review / Consent Gate
-        ↓
-IMPORT → CONTACTS
+ Dashboard (GitHub Pages) ──HTTPS JSON (API key)──►  Apps Script web app (40_Api)
+                                                          │
+            ┌──────────────────────────┬─────────────────┼────────────────────┬──────────────────┐
+            ▼                          ▼                 ▼                    ▼                  ▼
+      21_Missions              13_Worker (tick)     30_Contacts          31_Campaigns       32_Delivery (tick)
+      20_Discovery         12_Frontier 10_Fetcher   review gate          segments, render   Resend / endpoint
+                                11_Extractor        suppression          unsubscribe        webhooks
+            └──────────────────────────┴──────── 01_Store (one spreadsheet) ────────┴──────────────────┘
 ```
 
-The Source Scout is a discovery block. It does not grant marketing consent and does not automatically send campaigns.
+## Data model (one spreadsheet)
 
-### Source Registry
+| Sheet | Purpose | Key |
+|---|---|---|
+| `SETTINGS` | Operator settings (non-secret) | `key` |
+| `MISSIONS` | One row per mission: objective, budgets, status, counters | `mission_id` |
+| `SOURCE_REGISTRY` | Every URL OCE has ever seen, with scan stats | `canonical_url` |
+| `SOURCE_QUEUE` | Crawl frontier per mission | `queue_id`; unique (`mission_id`, `canonical_url`) |
+| `SOURCE_RESULTS` | One compact row per fetch (no full page bodies) | `result_id` |
+| `CANDIDATES` | De-duplicated contact evidence awaiting review | `dedupe_key` (`e:` e-mail, `p:` phone, `o:` organisation\|site) |
+| `CONTACTS` | Approved/imported audience with lawful basis and consent | `email` |
+| `SEGMENTS` | Audience rules; rows with the same `segment_id` are combined with AND | `segment_id` |
+| `CAMPAIGNS` | Content, sender, schedule, counters | `campaign_id` |
+| `SEND_QUEUE` | One row per (campaign, contact) | `send_id` |
+| `SEND_LOG` | Delivery and lifecycle events (SENT, SIMULATED, BOUNCED…) | — |
+| `SUPPRESSION` | Permanent do-not-contact list | `email` |
+| `HOLIDAYS` | Dates with no sending | `date` |
+| `EVENTS` | Operational log shown in the dashboard | — |
 
-`SOURCE_REGISTRY` is the persistent catalogue of discovered public sources. It keeps a stable `source_id`, canonical URL, domain, provenance, priority, scan status and queue status so OCE can remember sources across discovery runs.
+Tables are addressed by **header name**, not column position, so you can add or reorder columns in the sheet. Each execution reads a table once, changes it in memory and writes it back with as few `setValues` calls as possible.
 
-### Source Queue
+## Collection
 
-`SOURCE_QUEUE` is the controlled work queue for source collection. Queue states are designed around:
+1. **Discovery** turns the objective into 6–8 search queries (Brave API if configured, otherwise Bing RSS). It ranks the results (public-sector, directory and topic signals; social and news sites demoted) and adds curated registers that match the geography. Each site contributes at most two seeds.
+2. **Frontier.** URLs are canonicalised (tracking parameters, fragments, default ports and `index.*` removed; pagination kept) and queued once per mission. The page budget, depth limit, per-domain cap and same-site rule are enforced when a URL is queued.
+3. **Worker.** Each tick runs time-boxed rounds. A round leases up to `CRAWL_BATCH_SIZE` URLs (one per host per round, `CRAWL_PER_HOST_PER_TICK` per tick, one per tick for hosts with a robots crawl-delay of 5 s or more), fetches them in parallel and follows redirects itself, re-checking each hop. It extracts the page, saves the result and candidates, scores outgoing links and saves everything to the sheet.
+4. **Failures.** 429 and 5xx responses and timeouts retry after 5, 30 and 180 minutes. 401/403/451, login walls and bot challenges are marked `BLOCKED`. Non-HTML responses are `SKIPPED`. If an execution is killed mid-round, its leases expire after 10 minutes and the URLs are queued again.
 
-`QUEUED → SCRAPING → COMPLETED`
+## Contact pipeline
 
-with controlled exits such as `FAILED` and `BLOCKED`.
+`CANDIDATES (PENDING)` → operator review → `CONTACTS` with `lawful_basis` and `consent_status` → eligibility check (again at send time) → `SEND_QUEUE`.
 
-The queue is deliberately separate from the campaign `QUEUE` so source collection and marketing delivery cannot become accidentally coupled.
+A contact is eligible when it is `ACTIVE`, not on the suppression list, and has `consent_status=YES`, or has `lawful_basis=LEGITIMATE_INTEREST` while `ALLOW_LEGITIMATE_INTEREST=TRUE`.
 
-## Contact and campaign flow
+## Scheduling
 
-1. Authorized/consented contact data enters `IMPORT`.
-2. OCE normalizes email and Uganda phone formats.
-3. Consent and suppression checks run before a record enters `CONTACTS`.
-4. `SEGMENTS` defines targeting rules.
-5. `CAMPAIGNS` defines message content and scheduling policy.
-6. `QUEUE` creates campaign batches, defaulting to 250 contacts per batch.
-7. `HOLIDAYS` and sending-window rules prevent inappropriate dispatch times.
-8. `SEND_LOG` records delivery outcomes.
-9. `DASHBOARD` exposes operational counts.
+A single trigger, `oceTick`, runs every 5 minutes. Each tick collects pages if a mission is running, then delivers if a campaign is active. If neither has work, the trigger deletes itself. Starting a mission or activating a campaign recreates it.
 
-## Safety boundary
+## Limits worth knowing
 
-Source discovery and public collection must remain limited to public/authorized pages. OCE must not bypass login controls, CAPTCHAs, paywalls, access controls or collect private data indiscriminately. Public visibility does not establish marketing consent.
-
-## Delivery boundary
-
-V1.1 deliberately does not send email. A production delivery adapter must be connected and tested before `SEND_ENABLED` is turned on.
-
-The adapter should:
-- use a legitimate transactional/marketing email provider;
-- send only to contacts with appropriate consent;
-- process unsubscribe and bounce events;
-- write provider message IDs and outcomes to `SEND_LOG`;
-- update suppression records for hard bounces and unsubscribes;
-- respect provider rate limits and sending policies.
+- Apps Script consumer accounts allow 90 trigger-minutes per day and 20,000 URL fetches per day. Workspace accounts allow 6 hours per day and 100,000 fetches.
+- A spreadsheet holds 10 million cells. Because OCE stores compact rows, that is roughly 100k–150k queue/result rows in total. Archive old missions' rows when they pile up.
