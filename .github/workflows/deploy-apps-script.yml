@@ -42,9 +42,9 @@ jobs:
 
       - name: Redeploy existing web app (keeps the same /exec URL)
         env:
-          OCE_DEPLOYMENT_ID: ${{ secrets.OCE_DEPLOYMENT_ID }}
+          OCE_DEPLOYMENT_ID: ${{ secrets.OCE_DEPLOYMENT_ID || secrets.OCE_APPS_SCRIPT_DEPLOYMENT_ID }}
         run: |
-          test -n "$OCE_DEPLOYMENT_ID" || { echo "Missing GitHub secret: OCE_DEPLOYMENT_ID"; exit 1; }
+          test -n "$OCE_DEPLOYMENT_ID" || { echo "Missing GitHub secret: OCE_DEPLOYMENT_ID (or OCE_APPS_SCRIPT_DEPLOYMENT_ID)"; exit 1; }
           clasp deploy --deploymentId "$OCE_DEPLOYMENT_ID" --description "OCE ${GITHUB_SHA::7}"
 
       - name: Reminder

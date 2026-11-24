@@ -101,13 +101,25 @@ function OceTable_(name) {
   this.index = {};
   var self = this;
   this.headers.forEach(function (h, i) { if (h && self.index[h] === undefined) self.index[h] = i; });
-  var lastRow = sheet.getLastRow();
-  var values = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, width).getValues() : [];
-  this.rows = values.map(function (v, i) { return self._toObject(v, i + 2); });
-  this.nextRow = lastRow + 1;
+  this.width = width;
+  this.lastRow = sheet.getLastRow();
+  this.nextRow = this.lastRow + 1;
+  this._rows = null; // loaded lazily: append-only use (results, logs) never reads existing rows
   this.dirty = {};
   this.pending = [];
 }
+
+Object.defineProperty(OceTable_.prototype, 'rows', {
+  get: function () {
+    if (!this._rows) {
+      var self = this;
+      var values = this.lastRow > 1 ? this.sheet.getRange(2, 1, this.lastRow - 1, this.width).getValues() : [];
+      this._rows = values.map(function (v, i) { return self._toObject(v, i + 2); }).concat(this.pending);
+    }
+    return this._rows;
+  },
+  set: function (v) { this._rows = v; }
+});
 
 OceTable_.prototype._toObject = function (values, rowNumber) {
   var obj = {};
@@ -184,7 +196,7 @@ OceTable_.prototype.append = function (objects) {
   (objects || []).forEach(function (o) {
     var obj = self._toObject(self.headers.map(function () { return ''; }), self.nextRow++);
     Object.keys(o).forEach(function (k) { if (self.index[k] !== undefined) obj[k] = o[k]; });
-    self.rows.push(obj);
+    if (self._rows) self._rows.push(obj);
     self.pending.push(obj);
     if (self._keyed) Object.keys(self._keyed).forEach(function (f) {
       var key = String(obj[f] === undefined ? '' : obj[f]).trim();
