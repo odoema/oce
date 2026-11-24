@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.1 — 2026-11-24
+
+### Fixed
+- PDF reading failed with "Google Drive API has not been used in project … or it is disabled": the Drive API is off by default in an Apps Script project's hidden Cloud project, which the owner cannot open. `appsscript.json` now declares the Drive advanced service, which makes Google enable the API automatically. Scopes are unchanged (`drive.file`).
+- Clearer error when the Drive API is not enabled yet.
+- PDF lists, tested live on a real 2026 embassy contact list (40 contacts in 12 s): address lines (streets, plots, place names) are no longer taken as organisation names; a strong organisation line above is preferred; each phone comes only from its own entry; registers without e-mails no longer produce phone-number "contacts" from registration numbers.
+
 ## 2.3.0 — 2026-11-24
 
 ### Added
