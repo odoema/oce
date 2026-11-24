@@ -3,7 +3,7 @@
  *
  *  - robots.txt honoured (cached 12h per host), including Crawl-delay
  *  - redirects followed manually (max 4) so every hop is re-validated and the final URL is known
- *  - HTML only; other content types are skipped without downloading twice
+ *  - HTML pages, plus public PDFs (converted to text in 15_Documents); other content types are skipped
  *  - bounded size; charset detected from headers or <meta>
  *  - parallel batches via UrlFetchApp.fetchAll
  *
@@ -50,7 +50,7 @@ function oceFetchMany_(urls) {
         validateHttpsCertificates: true,
         headers: {
           'User-Agent': OCE.USER_AGENT,
-          'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
+          'Accept': 'text/html,application/xhtml+xml;q=0.9,application/pdf;q=0.8,*/*;q=0.1',
           'Accept-Language': 'en;q=0.9,*;q=0.5'
         }
       };
@@ -107,12 +107,19 @@ function oceClassifyResponse_(o, res, code, headers) {
   if (code === 404 || code === 410) { o.status = 'FAILED'; o.error = 'Not found (HTTP ' + code + ')'; return; }
   if (code === 429 || code >= 500) { o.status = 'RETRY'; o.error = 'Temporary failure (HTTP ' + code + ')'; return; }
   if (code < 200 || code >= 300) { o.status = 'FAILED'; o.error = 'HTTP ' + code; return; }
+  if (oceIsPdfResponse_(o.content_type, null, o.final_url)) {
+    var pdfBytes = res.getBlob().getBytes();
+    o.bytes = pdfBytes.length;
+    oceClassifyPdf_(o, pdfBytes);
+    return;
+  }
   if (o.content_type && !OCE_FETCH.HTML_TYPES.test(o.content_type)) {
     o.status = 'SKIPPED'; o.error = 'Not an HTML page (' + o.content_type.split(';')[0] + ')'; return;
   }
   var blob = res.getBlob();
   var bytes = blob.getBytes();
   o.bytes = bytes.length;
+  if (!o.content_type && oceIsPdfResponse_('', bytes, '')) { oceClassifyPdf_(o, bytes); return; }
   var charset = (o.content_type.match(/charset=([\w-]+)/i) || [])[1];
   var html;
   try {

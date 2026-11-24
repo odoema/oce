@@ -138,7 +138,8 @@ test('link scoring keeps same-site directory links and drops assets, social, log
     <a href="/wp-login.php">login</a><a href="https://elsewhere.com/a">x</a><a href="/blog/post">post</a><a href="/members?page=2">Next</a>`, 'https://site.ug/');
   const links = rt.ctx.oceScoreLinks_(page, { objective: 'members', same_site: true }).map((l) => l.url);
   assert.deepEqual(plain(links.slice(0, 2)).sort(), ['https://site.ug/contact-us', 'https://site.ug/members?page=2'].sort());
-  assert.ok(!links.some((u) => /pdf|twitter|login|elsewhere/.test(u)));
+  assert.ok(!links.some((u) => /twitter|login|elsewhere/.test(u)));
+  assert.ok(links.indexOf('https://site.ug/doc.pdf') > links.indexOf('https://site.ug/contact-us'), 'an unlabelled PDF ranks below contact pages');
 });
 
 test('robots.txt parsing: specific agent group, longest match, wildcards', () => {
@@ -168,7 +169,7 @@ test('mission end-to-end: budgets, robots, retries, de-duplication and completio
 
   const fetched = rt.state.fetchLog.map((f) => f.url);
   assert.ok(!fetched.includes('https://dir.example.ug/private/admin'), 'robots disallow respected');
-  assert.ok(!fetched.some((u) => /\.pdf|facebook|other-site|login/.test(u)), 'assets/social/off-site/login skipped');
+  assert.ok(!fetched.some((u) => /facebook|other-site|login/.test(u)), 'social/off-site/login skipped');
   assert.equal(web.flakyCalls(), 2, 'transient 503 retried once');
 
   const queue = rt.sheet('SOURCE_QUEUE').objects();
@@ -223,7 +224,7 @@ test('login walls and bot challenges are reported as BLOCKED, non-HTML as SKIPPE
   const rt = setupRuntime();
   rt.on('https://w.example.ug/a', html('Sign in', '<form action="/login" class="login"><input type="password"></form>'));
   rt.on('https://w.example.ug/b', html('Just a moment...', '<div id="cf-challenge">checking</div>'));
-  rt.on('https://w.example.ug/c', { status: 200, headers: { 'Content-Type': 'application/pdf' }, body: '%PDF' });
+  rt.on('https://w.example.ug/c', { status: 200, headers: { 'Content-Type': 'image/png' }, body: 'PNG' });
   rt.on('https://w.example.ug/d', { status: 403, body: 'no' });
   rt.on('https://w.example.ug/e', html('Contact', '<form><div class="g-recaptcha"></div></form><a href="mailto:a@w.example.ug">a</a>'));
   rt.fresh();
@@ -507,6 +508,84 @@ test('discovery: open-data topic words drop places and request words', () => {
   assert.ok(t.stems.includes('hotel') && t.stems.includes('resort'));
   assert.deepStrictEqual(JSON.parse(JSON.stringify(rt.ctx.oceOpenDataTopic_('NGOs in Uganda').stems)).slice(0, 2), ['non-governmental', 'ngo']);
   assert.ok(rt.ctx.oceOpenDataTopic_('Companies in Uganda').stems.includes('compan'), 'generic word kept when it is all there is');
+});
+
+/* ------------------------------------------------------------------ PDF documents */
+
+function mountDrive(rt, text, opts = {}) {
+  const calls = { upload: [], exported: 0, deleted: [] };
+  rt.on(/googleapis\.com\/upload\/drive\/v3\/files/, (url, o) => { calls.upload.push({ url, o }); return opts.uploadStatus ? { status: opts.uploadStatus, body: '{}' } : { status: 200, body: JSON.stringify({ id: 'tmpdoc1' }) }; });
+  rt.on(/googleapis\.com\/drive\/v3\/files\/tmpdoc1\/export/, () => { calls.exported++; return { status: 200, body: text }; });
+  rt.on(/googleapis\.com\/drive\/v3\/files\/tmpdoc1$/, (url, o) => { calls.deleted.push(o.method); return { status: 204, body: '' }; });
+  return calls;
+}
+const MEMBER_LIST = [
+  'INSTITUTE OF CERTIFIED PUBLIC ACCOUNTANTS',
+  'List of Approved Audit Firms 2026',
+  '1. Kato & Partners Certified Public Accountants',
+  'Plot 12 Kampala Road, Kampala',
+  'Tel: 0772 123 456  Email: info@katopartners.co.ug',
+  '2. Nsubuga Associates',
+  'P.O. Box 1234 Entebbe',
+  'Tel: +256 414 555 000',
+  'Email: audit@nsubuga.ug',
+  '3. Akello Consult Ltd, Email: akelloconsult@gmail.com, Tel 0701 222 333'
+].join('\n');
+
+test('PDF member list: converted through Drive, one candidate per entry with its own name and phone, temp file deleted', () => {
+  const rt = setupRuntime();
+  rt.on('https://icpau.example.ug/files/approved-firms.pdf', { status: 200, headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from('%PDF-1.4 fake') });
+  const drive = mountDrive(rt, MEMBER_LIST);
+  rt.fresh();
+  const r = rt.ctx.oceScanUrl_('https://icpau.example.ug/files/approved-firms.pdf');
+  assert.equal(r.document.name, 'approved-firms.pdf');
+  const by = Object.fromEntries(plain(r.candidates).map((c) => [c.email, c]));
+  assert.deepEqual(Object.keys(by).sort(), ['akelloconsult@gmail.com', 'audit@nsubuga.ug', 'info@katopartners.co.ug']);
+  assert.equal(by['info@katopartners.co.ug'].organization, 'Kato & Partners Certified Public Accountants');
+  assert.equal(by['info@katopartners.co.ug'].phone, '+256772123456');
+  assert.equal(by['audit@nsubuga.ug'].organization, 'Nsubuga Associates');
+  assert.equal(by['audit@nsubuga.ug'].phone, '+256414555000');
+  assert.equal(by['akelloconsult@gmail.com'].organization, 'Akello Consult Ltd');
+  assert.equal(by['akelloconsult@gmail.com'].website, '', 'free-mail domains are not websites');
+  assert.equal(by['audit@nsubuga.ug'].website, 'https://nsubuga.ug');
+  assert.ok(/approved-firms\.pdf/.test(by['audit@nsubuga.ug'].evidence));
+  const up = drive.upload[0];
+  assert.equal(up.o.headers.Authorization, 'Bearer test-token');
+  assert.ok(/multipart\/related/.test(up.o.contentType));
+  assert.equal(drive.exported, 1);
+  assert.deepEqual(drive.deleted, ['delete'], 'temporary Google Doc removed');
+});
+
+test('PDFs in a mission: list-named PDF links are followed and their entries become candidates', () => {
+  const rt = setupRuntime();
+  rt.on('https://assoc.example.ug/', html('Members | Example Association', '<a href="/docs/member-list.pdf">Download member list (PDF)</a><a href="/docs/annual-report.pdf">Annual report</a>'));
+  rt.on('https://assoc.example.ug/docs/member-list.pdf', { status: 200, headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from('%PDF-1.4') });
+  rt.on('https://assoc.example.ug/docs/annual-report.pdf', { status: 200, headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from('%PDF-1.4') });
+  mountDrive(rt, MEMBER_LIST);
+  rt.fresh();
+  rt.ctx.oceCreateMission_('Audit firms in Uganda', { seeds: ['https://assoc.example.ug/'], skip_discovery: true, max_pages: 10, max_depth: 1 });
+  drain(rt);
+  const q = rt.sheet('SOURCE_QUEUE').objects();
+  const list = q.find((r) => /member-list\.pdf/.test(r.url));
+  const report = q.find((r) => /annual-report\.pdf/.test(r.url));
+  assert.ok(list && report && Number(list.priority) > Number(report.priority), 'member list PDF outranks other PDFs');
+  const emails = rt.sheet('CANDIDATES').objects().map((c) => c.email);
+  assert.ok(emails.includes('info@katopartners.co.ug') && emails.includes('audit@nsubuga.ug'));
+});
+
+test('PDF reading: missing Drive permission is explained; CRAWL_PDFS=FALSE skips PDFs', () => {
+  const rt = setupRuntime();
+  rt.on('https://p.example.ug/a.pdf', { status: 200, headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from('%PDF') });
+  mountDrive(rt, '', { uploadStatus: 403 });
+  rt.fresh();
+  const o = rt.ctx.oceFetchMany_(['https://p.example.ug/a.pdf'])[0];
+  assert.equal(o.status, 'FAILED');
+  assert.ok(/permission.*oceSetup/i.test(o.error));
+  rt.ctx.oceSetSetting_('CRAWL_PDFS', 'FALSE');
+  rt.fresh();
+  const o2 = rt.ctx.oceFetchMany_(['https://p.example.ug/a.pdf'])[0];
+  assert.equal(o2.status, 'SKIPPED');
+  assert.equal(rt.ctx.oceIsAssetUrl_('https://p.example.ug/a.pdf'), true, 'PDF links are not queued when switched off');
 });
 
 /* ------------------------------------------------------------------ migration */

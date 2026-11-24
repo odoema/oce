@@ -368,6 +368,7 @@ function oceScoreLinks_(page, ctx) {
     topicTerms.forEach(function (t) { if (hay.indexOf(t) >= 0) p += 6; });
     if (linkSite !== site) p -= 10;
     if (l.url.length > 180) p -= 10;
+    if (/\.pdf(\?|#|$)/i.test(l.url)) p += /member|list|director|register|firms|contacts?|roster|licensed|practising|practicing|approved/.test(hay) ? 22 : -12;
     return { url: l.url, label: l.label, priority: Math.max(1, Math.min(95, p)) };
   }).filter(Boolean).sort(function (a, b) { return b.priority - a.priority; });
 }

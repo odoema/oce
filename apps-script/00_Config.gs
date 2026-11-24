@@ -9,7 +9,7 @@
  */
 
 var OCE = {
-  VERSION: '2.2.1',
+  VERSION: '2.3.0',
   NAME: 'OCE — Odoch Campaign Engine',
   SPREADSHEET_NAME: 'OCE — Campaign Engine Data',
   SPREADSHEET_PROPERTY: 'OCE_SPREADSHEET_ID',
@@ -56,7 +56,7 @@ var OCE_SCHEMA = {
  * [key, default, description, editableFromApi]
  */
 var OCE_DEFAULT_SETTINGS = [
-  ['VERSION', '2.2.1', 'Installed OCE version', false],
+  ['VERSION', '2.3.0', 'Installed OCE version', false],
   ['TIMEZONE', 'Africa/Kampala', 'IANA timezone used for windows and dates', true],
   ['DEFAULT_COUNTRY_CODE', '256', 'Country calling code used to normalise local phone numbers', true],
   ['CRAWL_ENABLED', 'TRUE', 'Master switch for background collection', true],
@@ -70,6 +70,7 @@ var OCE_DEFAULT_SETTINGS = [
   ['CRAWL_MAX_ATTEMPTS', '3', 'Retries for transient failures', true],
   ['RESPECT_ROBOTS', 'TRUE', 'Honour robots.txt, robots meta tags and X-Robots-Tag (strongly recommended)', true],
   ['CRAWL_USE_SITEMAPS', 'TRUE', 'Seed each mission source with URLs from its sitemap.xml', true],
+  ['CRAWL_PDFS', 'TRUE', 'Read public PDF documents (member lists, directories) via Google Drive conversion', true],
   ['MIN_CANDIDATE_CONFIDENCE', '40', 'Candidates below this confidence are stored as LOW_QUALITY', true],
   ['SEND_ENABLED', 'FALSE', 'Global delivery switch', true],
   ['DELIVERY_MODE', 'DRY_RUN', 'DRY_RUN, TEST or PRODUCTION', true],

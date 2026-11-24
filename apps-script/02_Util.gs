@@ -146,7 +146,9 @@ function oceSiteOf_(url) {
 
 function oceIsAssetUrl_(url) {
   var p = oceParseUrl_(url);
-  return !!p && OCE_ASSET_EXT.test(p.path);
+  if (!p) return false;
+  if (/\.pdf$/i.test(p.path) && oceSettingBool_('CRAWL_PDFS', true)) return false; // public PDFs are read (15_Documents)
+  return OCE_ASSET_EXT.test(p.path);
 }
 
 function oceIsSocialUrl_(url) {
