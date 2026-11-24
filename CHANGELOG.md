@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0 — 2026-11-24
+
+### Added
+- Sitemap seeding: when a mission's seed page is collected, OCE reads that site's sitemaps (robots.txt `Sitemap:` lines first, then `/sitemap.xml`, `/sitemap_index.xml`, `/sitemap-index.xml`). It follows one level of sitemap index, reads `.xml.gz` files, and stops after 12 files or 100 URLs per site. The 40 best-scored URLs are queued at depth 1. Fetches obey robots.txt and per-host pacing, and run once per site per mission. Can be switched off with the setting `CRAWL_USE_SITEMAPS`.
+- Robots meta tags and `X-Robots-Tag`. A page marked `noindex` is recorded as `SKIPPED` and no contact data is kept from it, but its links are still followed. `nofollow` stops link-following from that page.
+- 4 tests (27 in total).
+
+Ideas taken from PR #2 ("intelligent queue bridge"), rebuilt on the v2 fetcher. PR #2's per-candidate profiling was left out because it costs several extra fetches per search result.
+
 ## 2.0.0 — 2026-11-24
 
 Rewrite of the engine so the documented workflow works end to end.
@@ -24,4 +33,4 @@ Rewrite of the engine so the documented workflow works end to end.
 - Delivery: DRY_RUN, TEST and PRODUCTION modes, a Resend batch provider and a custom endpoint provider, idempotency, caps, sending window, holidays, signed one-click unsubscribe (RFC 8058), and a bounce/complaint webhook with suppression.
 - Dashboard with Overview, Missions, Review, Contacts, Campaigns and Settings.
 - In-place v1 → v2 migration, `oceHealthCheck`, production approval gate.
-- Mock Apps Script runtime, 23 tests, duplicate-global check, local dev server, CI.
+- Mock Apps Script runtime, 27 tests, duplicate-global check, local dev server, CI.

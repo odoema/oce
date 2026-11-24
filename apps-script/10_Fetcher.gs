@@ -100,6 +100,7 @@ function oceFetchMany_(urls) {
 
 function oceClassifyResponse_(o, res, code, headers) {
   o.content_type = String(headers['content-type'] || '');
+  o.x_robots = String(headers['x-robots-tag'] || '').toLowerCase();
   if (code === 401 || code === 403 || code === 407 || code === 451) {
     o.status = 'BLOCKED'; o.error = 'Access restricted (HTTP ' + code + ')'; return;
   }
@@ -198,12 +199,14 @@ function oceParseRobots_(text) {
   var groups = [];
   var current = null;
   var lastWasAgent = false;
+  var sitemaps = [];
   String(text || '').split(/\r?\n/).forEach(function (line) {
     line = line.replace(/#.*$/, '').trim();
     var m = line.match(/^([a-z-]+)\s*:\s*(.*)$/i);
     if (!m) return;
     var field = m[1].toLowerCase();
     var value = m[2].trim();
+    if (field === 'sitemap') { if (/^https?:\/\//i.test(value) && sitemaps.length < 20) sitemaps.push(value); return; } // group-independent
     if (field === 'user-agent') {
       if (!lastWasAgent || !current) { current = { agents: [], rules: [], delay: 0 }; groups.push(current); }
       current.agents.push(value.toLowerCase());
@@ -222,7 +225,7 @@ function oceParseRobots_(text) {
   var mine = groups.filter(function (g) { return g.agents.some(function (a) { return a.indexOf('oce') === 0; }); });
   var star = groups.filter(function (g) { return g.agents.indexOf('*') >= 0; });
   var chosen = mine.length ? mine : star;
-  var out = { rules: [], delay: 0 };
+  var out = { rules: [], delay: 0, sitemaps: sitemaps };
   chosen.forEach(function (g) { out.rules = out.rules.concat(g.rules); out.delay = Math.max(out.delay, g.delay); });
   return out;
 }

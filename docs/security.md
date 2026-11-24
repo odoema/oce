@@ -5,7 +5,7 @@ OCE supports **permission-based** marketing. Its software controls make complian
 ## Collection controls (enforced in code)
 
 - Only public HTTP/HTTPS pages. Private, local and metadata hosts are blocked.
-- robots.txt is honoured by default (`RESPECT_ROBOTS`), including `Crawl-delay`.
+- robots.txt is honoured by default (`RESPECT_ROBOTS`), including `Crawl-delay`. So are robots meta tags and `X-Robots-Tag`: `noindex` pages yield no contact data, and links on `nofollow` pages are not followed.
 - Login walls, HTTP 401/403/451 and bot challenges are recorded as `BLOCKED` and never retried around.
 - Social networks are excluded from crawling. Per-host politeness limits apply.
 - OCE identifies itself honestly: `User-Agent: OCE-PublicCollector/2.0`.

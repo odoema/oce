@@ -55,8 +55,13 @@ function oceExtractPage_(html, url) {
     oceOrgFromTitle_(title);
   var address = entities.address || oceLabeled_(text, ['physical address', 'office address', 'postal address', 'address', 'location', 'head office', 'visit us']);
 
+  // <meta name="robots"> plus OCE/googlebot-specific variants; X-Robots-Tag is merged in by the worker.
+  var robotsMeta = [oceMetaContent_(head, ['robots']), oceMetaContent_(head, ['oce']), oceMetaContent_(head, ['googlebot'])].join(',').toLowerCase();
+
   return {
     url: url,
+    noindex: /\b(noindex|none)\b/.test(robotsMeta),
+    nofollow: /\b(nofollow|none)\b/.test(robotsMeta),
     title: title,
     description: description,
     site_name: siteName,

@@ -9,9 +9,9 @@ Objective ─► Discover ─► Collect ─► Extract ─► Review ─► Con
                                       orgs                  recorded               PRODUCTION  bounces, caps
 ```
 
-## Current release — v2.0.0
+## Current release — v2.1.0
 
-v2 makes the README's original promise work end to end and hardens every step:
+v2.1 adds **sitemap seeding** (directory sites often list every member page in `sitemap.xml`) and honours **`noindex`/`nofollow`** robots meta tags and `X-Robots-Tag` headers. v2 made the README's original promise work end to end and hardens every step:
 
 | Area | v1 | v2 |
 |---|---|---|
@@ -25,7 +25,7 @@ v2 makes the README's original promise work end to end and hardens every step:
 | Scheduling | Trigger every minute, forever (uses up the 90 min/day quota) | One 5-minute tick that removes itself when idle |
 | Security | Anyone with the URL could start missions or use the script as an open fetch proxy | API key on every action, rate limiting, signed tokens, secrets only in Script Properties |
 | UI | `styles.css` empty; no review or campaign screens | Dashboard with Overview, Missions, Review, Contacts, Campaigns and Settings |
-| Quality | Syntax check only | 23 tests on a mock Apps Script runtime + duplicate-global check in CI |
+| Quality | Syntax check only | 27 tests on a mock Apps Script runtime + duplicate-global check in CI |
 
 ## Quick start
 
@@ -49,6 +49,7 @@ apps-script/          Google Apps Script project (one global scope; files load i
   11_Extractor.gs     page → intelligence + contact candidates, link scoring
   12_Frontier.gs      persistent crawl queue: budgets, leases, retries
   13_Worker.gs        time-boxed collection rounds
+  14_Sitemaps.gs      sitemap.xml seeding (robots-declared, index + gzip, capped, paced)
   20_Discovery.gs     search providers (Brave, Bing RSS) + curated registers
   21_Missions.gs      mission lifecycle and progress
   22_Scheduler.gs     self-disabling 5-minute trigger
@@ -75,7 +76,7 @@ See [docs/security.md](docs/security.md) for the compliance checklist.
 
 ## Roadmap
 
-1. Sitemap-based discovery and directory pagination heuristics per site.
+1. Per-site directory pagination heuristics.
 2. Double opt-in campaign type (turn `LEGITIMATE_INTEREST` contacts into `CONSENT`).
 3. Open and click analytics in the dashboard (the webhook already records the events).
 4. Optional BigQuery/Supabase storage adapter for lists beyond ~50k rows.

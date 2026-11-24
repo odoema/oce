@@ -30,5 +30,7 @@ The suite covers:
 - Discovery ranking, deny-list and site diversity
 - v1 → v2 migration
 - Politeness: per-host spacing (1 s or Crawl-delay) and per-tick caps
+- Sitemaps: robots `Sitemap:` lines, index → child (incl. gzip), caps, same-site filter, robots-disallowed sitemaps, pacing, once per site
+- `noindex` / `nofollow` meta tags and `X-Robots-Tag`
 
 When the real Apps Script services behave differently from the mock (for example quotas or exact `fetchAll` error semantics), the code handles both: see the `fetchAll` fallback in `10_Fetcher.gs`.

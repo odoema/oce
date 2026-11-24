@@ -94,7 +94,7 @@ class HttpResponse {
   getResponseCode() { return this.status; }
   getHeaders() { return this.headers; }
   getContentText() { return this.body.toString('utf8'); }
-  getBlob() { const b = this.body; return { getBytes: () => toSigned(b), getDataAsString: (cs) => b.toString(cs && /8859|latin/i.test(cs) ? 'latin1' : 'utf8') }; }
+  getBlob() { const b = this.body; return { __buf: b, setContentType() { return this; }, getBytes: () => toSigned(b), getDataAsString: (cs) => b.toString(cs && /8859|latin/i.test(cs) ? 'latin1' : 'utf8') }; }
 }
 
 function createRuntime(opts = {}) {
@@ -190,6 +190,7 @@ function createRuntime(opts = {}) {
     base64EncodeWebSafe: (s) => Buffer.from(String(s), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
     base64DecodeWebSafe: (s) => toSigned(Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
     newBlob: (bytes) => ({ getDataAsString: (cs) => toBuffer(bytes).toString(cs && /8859|latin/i.test(cs) ? 'latin1' : 'utf8'), getBytes: () => bytes }),
+    ungzip: (blob) => { const out = require('zlib').gunzipSync(blob.__buf || toBuffer(blob.getBytes())); return { getDataAsString: () => out.toString('utf8'), getBytes: () => toSigned(out) }; },
     parseCsv(text) {
       const rows = []; let row = []; let cur = ''; let q = false;
       for (let i = 0; i < text.length; i++) {

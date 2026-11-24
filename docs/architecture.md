@@ -39,7 +39,8 @@ Tables are addressed by **header name**, not column position, so you can add or 
 1. **Discovery** turns the objective into 6–8 search queries (Brave API if configured, otherwise Bing RSS). It ranks the results (public-sector, directory and topic signals; social and news sites demoted) and adds curated registers that match the geography. Each site contributes at most two seeds.
 2. **Frontier.** URLs are canonicalised (tracking parameters, fragments, default ports and `index.*` removed; pagination kept) and queued once per mission. The page budget, depth limit, per-domain cap and same-site rule are enforced when a URL is queued.
 3. **Worker.** Each tick runs time-boxed rounds. A round leases up to `CRAWL_BATCH_SIZE` URLs (one per host per round, `CRAWL_PER_HOST_PER_TICK` per tick, one per tick for hosts with a robots crawl-delay of 5 s or more), fetches them in parallel and follows redirects itself, re-checking each hop. It extracts the page, saves the result and candidates, scores outgoing links and saves everything to the sheet.
-4. **Failures.** 429 and 5xx responses and timeouts retry after 5, 30 and 180 minutes. 401/403/451, login walls and bot challenges are marked `BLOCKED`. Non-HTML responses are `SKIPPED`. If an execution is killed mid-round, its leases expire after 10 minutes and the URLs are queued again.
+4. **Sitemaps.** When a seed page is collected, OCE also reads that site's sitemaps (declared in robots.txt, otherwise the standard paths), up to 12 files and 100 URLs per site. The best 40 URLs are queued at depth 1, once per site per mission.
+5. **Failures.** 429 and 5xx responses and timeouts retry after 5, 30 and 180 minutes. 401/403/451, login walls and bot challenges are marked `BLOCKED`. Non-HTML responses are `SKIPPED`. If an execution is killed mid-round, its leases expire after 10 minutes and the URLs are queued again.
 
 ## Contact pipeline
 

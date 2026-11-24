@@ -82,17 +82,32 @@ function oceProcessOutcome_(row, outcome) {
     }
   }
   if (page) {
-    var candidates = oceBuildCandidates_(page, { mission_id: missionId });
-    out.candidates = oceUpsertCandidates_(candidates).touched;
+    var respect = oceSettingBool_('RESPECT_ROBOTS', true);
+    var xr = String(outcome.x_robots || '');
+    var noindex = respect && (page.noindex || /\b(noindex|none)\b/.test(xr));
+    var nofollow = respect && (page.nofollow || /\b(nofollow|none)\b/.test(xr));
+    if (noindex) {
+      // The site asked not to be indexed: keep no contact data from this page.
+      outcome.status = 'SKIPPED';
+      outcome.ok = false;
+      outcome.error = 'noindex: page asks not to be indexed (contact data not collected)';
+    } else {
+      var candidates = oceBuildCandidates_(page, { mission_id: missionId });
+      out.candidates = oceUpsertCandidates_(candidates).touched;
+    }
     var depth = Number(row.depth || 0);
     var maxDepth = mission.max_depth === '' || mission.max_depth === undefined ? oceSettingNumber_('CRAWL_MAX_DEPTH', 2) : Number(mission.max_depth);
     if (depth < maxDepth && String(mission.status).toUpperCase() === 'RUNNING') {
       var sameSite = mission.same_site === '' || mission.same_site === undefined ? oceSettingBool_('CRAWL_SAME_SITE', true) : String(mission.same_site).toUpperCase() !== 'FALSE';
-      var links = oceScoreLinks_(page, { objective: mission.objective, same_site: sameSite }).slice(0, 40);
-      var enq = oceEnqueue_(mission, links.map(function (l) {
-        return { url: l.url, label: l.label, priority: Math.round(l.priority * 0.9 + (Number(row.priority) || 0) * 0.1) - depth * 5, depth: depth + 1, parent_url: row.url, source_type: 'DISCOVERED_PAGE' };
-      }));
-      out.queued = enq.queued;
+      if (!nofollow) {
+        var links = oceScoreLinks_(page, { objective: mission.objective, same_site: sameSite }).slice(0, 40);
+        var enq = oceEnqueue_(mission, links.map(function (l) {
+          return { url: l.url, label: l.label, priority: Math.round(l.priority * 0.9 + (Number(row.priority) || 0) * 0.1) - depth * 5, depth: depth + 1, parent_url: row.url, source_type: 'DISCOVERED_PAGE' };
+        }));
+        out.queued = enq.queued;
+      }
+      // Seeds also contribute their site's sitemap (once per site per mission).
+      if (depth === 0 && oceSettingBool_('CRAWL_USE_SITEMAPS', true)) out.queued += oceSeedFromSitemaps_(mission, row, page, sameSite);
     }
   }
   oceSaveResult_(row, outcome, page, out.candidates);
@@ -101,6 +116,7 @@ function oceProcessOutcome_(row, outcome) {
 }
 
 function oceSaveResult_(row, outcome, page, candidateCount) {
+  if (page && /^noindex/.test(String(outcome.error || ''))) page = { title: page.title, description: '', language: page.language, links: page.links, text: '', emails: [], phones: [], organization: '', address: '', socials: [], text_excerpt: '' };
   oceTable_('SOURCE_RESULTS').append([{
     result_id: oceUuid_(), queue_id: row.queue_id, source_id: row.source_id, mission_id: oceQueueMissionId_(row),
     url: row.url, final_url: outcome.final_url || row.url, status: outcome.ok ? 'COMPLETED' : outcome.status,

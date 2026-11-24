@@ -536,3 +536,70 @@ test('politeness: one host is paced >= 1 s (or its Crawl-delay) and capped per t
   assert.ok(times.slow.length >= 5 && times.slow.length <= 10);
   assert.ok(gaps(times.slow).every((g) => g >= 3000), 'crawl-delay honoured: ' + gaps(times.slow));
 });
+
+/* ------------------------------------------------------------------ v2.1: sitemaps + robots meta */
+
+test('robots.txt Sitemap: lines are collected regardless of group', () => {
+  const rt = createRuntime();
+  const r = rt.ctx.oceParseRobots_('Sitemap: https://a.ug/sm-main.xml\nUser-agent: *\nDisallow: /x\nSitemap: https://a.ug/sm-2.xml.gz\nSitemap: not-a-url');
+  assert.deepEqual(plain(r.sitemaps), ['https://a.ug/sm-main.xml', 'https://a.ug/sm-2.xml.gz']);
+});
+
+test('sitemap seeding: robots-declared index → child sitemaps (incl. gzip), caps, same-site, robots, pacing', () => {
+  const rt = setupRuntime();
+  const zlib = require('zlib');
+  const times = [];
+  const urlset = (urls) => `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>${u}</loc></url>`).join('')}</urlset>`;
+  rt.on('https://sm.example.ug/robots.txt', { status: 200, body: 'User-agent: *\nDisallow: /private\nSitemap: https://sm.example.ug/sitemap-index.xml\n' });
+  rt.on('https://sm.example.ug/sitemap-index.xml', () => { times.push(rt.ctx.Date.now()); return { status: 200, body: '<sitemapindex><sitemap><loc>https://sm.example.ug/members.xml</loc></sitemap><sitemap><loc>https://sm.example.ug/more.xml.gz</loc></sitemap><sitemap><loc>https://sm.example.ug/private/hidden.xml</loc></sitemap></sitemapindex>' }; });
+  rt.on('https://sm.example.ug/members.xml', () => { times.push(rt.ctx.Date.now()); return { status: 200, body: urlset(Array.from({ length: 80 }, (_, i) => `https://sm.example.ug/member/${i}`).concat(['https://elsewhere.com/x', 'https://sm.example.ug/logo.png', 'https://sm.example.ug/login'])) }; });
+  rt.on('https://sm.example.ug/more.xml.gz', () => { times.push(rt.ctx.Date.now()); return { status: 200, headers: { 'Content-Type': 'application/x-gzip' }, body: zlib.gzipSync(urlset(Array.from({ length: 60 }, (_, i) => `https://sm.example.ug/contact/${i}`))) }; });
+  rt.on('https://sm.example.ug/private/hidden.xml', () => { throw new Error('robots-disallowed sitemap fetched'); });
+  rt.on('https://sm.example.ug/sitemap.xml', () => { throw new Error('fallback path fetched although a declared sitemap exists'); });
+  rt.on('https://sm.example.ug/', html('Members | SM Association', '<a href="/about">About</a>'));
+  rt.fresh();
+  const m = rt.ctx.oceCreateMission_('members', { seeds: ['https://sm.example.ug/'], skip_discovery: true, max_pages: 500, max_depth: 2 });
+  rt.fresh();
+  rt.ctx.oceRunWorker_({ max_pages: 1, max_seconds: 120 });
+  const q = rt.sheet('SOURCE_QUEUE').objects();
+  const fromSitemap = q.filter((r) => /^SITEMAP_URL/.test(r.source));
+  assert.equal(fromSitemap.length, 40, 'at most 40 sitemap URLs queued');
+  assert.ok(fromSitemap.every((r) => r.url.startsWith('https://sm.example.ug/') && !/logo|login/.test(r.url)), 'same-site, no assets/login');
+  assert.ok(fromSitemap.some((r) => /\/contact\//.test(r.url)), 'gzip child sitemap read; contact pages ranked high');
+  assert.ok(fromSitemap.every((r) => Number(r.depth) === 1));
+  const gaps = times.slice(1).map((t, i) => t - times[i]);
+  assert.ok(gaps.every((g) => g >= 1000), 'sitemap fetches paced: ' + gaps);
+  // once per site per mission
+  rt.fresh();
+  assert.equal(rt.ctx.oceSeedFromSitemaps_(rt.ctx.oceTable_('MISSIONS').get('mission_id', m.mission_id), { url: 'https://sm.example.ug/' }, { url: 'https://sm.example.ug/' }, true), 0);
+});
+
+test('sitemap URL cap of 100 per site and fallback /sitemap.xml when robots declares none', () => {
+  const rt = setupRuntime();
+  rt.on('https://fb.example.ug/sitemap.xml', { status: 200, body: '<urlset>' + Array.from({ length: 300 }, (_, i) => `<url><loc>https://fb.example.ug/firm/${i}</loc></url>`).join('') + '</urlset>' });
+  rt.fresh();
+  const found = rt.ctx.oceReadSitemaps_('https://fb.example.ug');
+  assert.equal(found.urls.length, 100);
+  assert.deepEqual(plain(found.files), ['https://fb.example.ug/sitemap.xml']);
+});
+
+test('noindex pages keep no contact data; nofollow stops link-following; X-Robots-Tag honoured', () => {
+  const rt = setupRuntime();
+  rt.on('https://ni.example.ug/a', html('A', '<a href="mailto:a@ni.example.ug">m</a><a href="/b">b</a>', '<meta name="robots" content="noindex, follow">'));
+  rt.on('https://ni.example.ug/b', html('B', '<a href="mailto:b@ni.example.ug">m</a><a href="/c">c</a>', '<meta name="robots" content="nofollow">'));
+  rt.on('https://ni.example.ug/c', html('C', 'never reached'));
+  rt.on('https://ni.example.ug/d', { status: 200, headers: { 'Content-Type': 'text/html', 'X-Robots-Tag': 'noindex' }, body: '<html><body><a href="mailto:d@ni.example.ug">d</a></body></html>' });
+  rt.fresh();
+  rt.ctx.oceCreateMission_('ni', { seeds: ['https://ni.example.ug/a', 'https://ni.example.ug/d'], skip_discovery: true, max_depth: 3 });
+  drain(rt);
+  const q = Object.fromEntries(rt.sheet('SOURCE_QUEUE').objects().map((r) => [r.url.replace('https://ni.example.ug', ''), r.status]));
+  assert.equal(q['/a'], 'SKIPPED');
+  assert.equal(q['/b'], 'COMPLETED', 'links on a noindex page are still followed');
+  assert.equal(q['/c'], undefined, 'nofollow respected');
+  assert.equal(q['/d'], 'SKIPPED', 'X-Robots-Tag noindex');
+  const emails = rt.sheet('CANDIDATES').objects().map((c) => c.email);
+  assert.deepEqual(plain(emails), ['b@ni.example.ug']);
+  const resA = rt.sheet('SOURCE_RESULTS').objects().find((r) => r.url.endsWith('/a'));
+  assert.equal(resA.emails, '');
+  assert.match(resA.error, /^noindex/);
+});

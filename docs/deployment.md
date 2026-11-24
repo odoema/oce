@@ -51,7 +51,7 @@ GitHub Pages publishes `web/` on every push to `main` (*Deploy OCE Pages UI* wor
 ## Local development
 
 ```bash
-npm test          # 23 tests against a mock Apps Script runtime
+npm test          # 27 tests against a mock Apps Script runtime
 npm run check     # syntax + duplicate-global check
 npm run dev       # dashboard + real backend code on http://localhost:8787 with demo data
 ```
