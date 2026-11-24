@@ -6,7 +6,7 @@
   <meta name="referrer" content="no-referrer">
   <title>OCE — Odoch Campaign Engine</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23134e4a'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%2399f6e4' stroke-width='3'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=2.2.0">
+  <link rel="stylesheet" href="styles.css?v=2.2.1">
 </head>
 <body>
 <div class="shell">
@@ -221,6 +221,12 @@
         </form>
       </div>
       <div class="card">
+        <h2>Connect another browser or phone</h2>
+        <p class="muted">Each browser keeps its own connection. Open this personal link once on any other browser or phone and it connects by itself, no typing. Keep it private: it works like a password.</p>
+        <div class="btns"><button type="button" class="primary" id="shareCopy">Copy link</button><button type="button" class="ghost" id="shareShow">Show link</button></div>
+        <div id="shareBox" class="hidden" style="margin-top:10px"><input id="shareLink" readonly style="width:100%" aria-label="Connect link"></div>
+      </div>
+      <div class="card">
         <h2>Engine settings</h2>
         <p class="muted">Stored in the SETTINGS sheet. Secrets (API keys, production approval) are set in Apps Script → Project Settings → Script Properties and are never shown here.</p>
         <form id="settingsForm"><div id="settingsFields" class="settings-list"></div><button class="primary">Save settings</button></form>
@@ -232,9 +238,9 @@
 </div>
 
 <dialog id="modal"><form method="dialog"><div id="modalBody"></div><div class="btns end"><button class="ghost">Close</button></div></form></dialog>
-<script src="app.js?v=2.2.0"></script>
-<script src="manual.js?v=2.2.0"></script>
-<script src="guide-logic.js?v=2.2.0"></script>
-<script src="assistant.js?v=2.2.0"></script>
+<script src="app.js?v=2.2.1"></script>
+<script src="manual.js?v=2.2.1"></script>
+<script src="guide-logic.js?v=2.2.1"></script>
+<script src="assistant.js?v=2.2.1"></script>
 </body>
 </html>

@@ -11,10 +11,14 @@
  * See docs/manual.md for how to update it.
  */
 window.OCE_MANUAL = {
-  version: '2.2.0',
+  version: '2.2.1',
   updated: '2026-11-24',
 
   whatsNew: {
+    '2.2.1': [
+      'New browser or phone? Open your personal connect link once and it connects by itself. Find it under Settings → Connect another browser or phone.',
+      'Browsers that remembered an old OCE address now switch to the current one automatically.'
+    ],
     '2.2.0': [
       'Finding websites is now free: OCE reads Wikipedia lists and Wikidata. No search key, no account, no payment.',
       'Meet the OCE assistant: click "Ask OCE" (bottom right) and it walks you through finding contacts, reviewing them, writing a campaign or importing a list, one friendly question at a time.',
@@ -50,7 +54,8 @@ window.OCE_MANUAL = {
     settings: { title: 'Settings', items: [
       { kind: 'input', label: 'Web app URL (/exec)' },
       { kind: 'input', label: 'API key', secret: true },
-      { kind: 'button', label: 'Save & connect', primary: true },
+      { kind: 'button', label: 'Save & connect' },
+      { kind: 'button', label: 'Copy link', primary: true },
       { kind: 'button', label: 'Forget on this device' }
     ] },
     missions: { title: 'Missions', items: [
@@ -97,16 +102,16 @@ window.OCE_MANUAL = {
       tips: ['Menu (top of the chat) always takes you back to the start.', 'You can type things like "find NGOs in Kenya" or "how do unsubscribes work?".', 'It never sends anything without you choosing Activate, and practice mode stays on until you go live.']
     },
     {
-      id: 'connect', icon: '🔌', title: 'Connect the dashboard', tagline: 'Once per browser. Takes a minute.',
+      id: 'connect', icon: '🔌', title: 'Connect a browser or phone', tagline: 'One click per device. No typing.',
       covers: ['settings', 'overview'], open: 'settings',
-      ui: ['Web app URL (/exec)', 'Save & connect', 'Forget on this device'],
+      ui: ['Connect another browser or phone', 'Copy link', 'Show link', 'Web app URL (/exec)', 'Save & connect', 'Forget on this device'],
       steps: [
-        { title: 'Open Settings', text: 'Click Settings in the green sidebar.', mock: { screen: 'settings' } },
-        { title: 'Paste the web app address', text: 'It ends in /exec. You got it when OCE was set up.', mock: { screen: 'settings', type: { into: 'Web app URL (/exec)', text: 'https://script.google.com/macros/s/…/exec' } } },
-        { title: 'Paste your API key', text: 'Treat it like a password. Forgot it? Run oceShowApiKey in the Apps Script editor.', mock: { screen: 'settings', type: { into: 'API key', text: '••••••••••••••••' } } },
-        { title: 'Save & connect', text: 'The sidebar dot turns green and Overview fills with your numbers.', mock: { screen: 'settings', click: 'Save & connect' } }
+        { title: 'On a connected browser, open Settings', text: 'Any browser or phone where OCE already works.', mock: { screen: 'settings' } },
+        { title: 'Copy your connect link', text: 'Under "Connect another browser or phone", click Copy link.', mock: { screen: 'settings', click: 'Copy link' } },
+        { title: 'Open it on the new device', text: 'Send it to yourself (WhatsApp, email) and open it there. It connects by itself and the link disappears from the address bar.', mock: { screen: 'settings' } },
+        { title: 'No other device? Paste the key', text: 'Paste your API key in Settings and click Save & connect. Forgot it? Run oceShowApiKey in the Apps Script editor.', mock: { screen: 'settings', type: { into: 'API key', text: '••••••••••••••••' } } }
       ],
-      tips: ['On a shared computer, click "Forget on this device" when you are done.']
+      tips: ['Keep the connect link private: it works like a password.', 'On a shared computer, click "Forget on this device" when you are done.']
     },
     {
       id: 'missions', icon: '🔎', title: 'Find contacts', tagline: 'A mission is one search job: "find me X".',
@@ -180,7 +185,7 @@ window.OCE_MANUAL = {
 
   /* Every key of OCE_DEFAULT_SETTINGS, with its default and a plain explanation. */
   settings: [
-    { key: 'VERSION', def: '2.2.0', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
+    { key: 'VERSION', def: '2.2.1', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
     { key: 'TIMEZONE', def: 'Africa/Kampala', plain: 'Clock used for sending hours and dates.', group: 'System' },
     { key: 'DEFAULT_COUNTRY_CODE', def: '256', plain: 'Turns 0772… into +256772….', group: 'System' },
     { key: 'CRAWL_ENABLED', def: 'TRUE', plain: 'Master switch for finding and collecting.', group: 'Finding' },
@@ -217,7 +222,7 @@ window.OCE_MANUAL = {
     { q: 'Will OCE email anyone without my approval?', fix: 'No. Found contacts wait in Review until you approve them with a basis, and nothing sends until you activate a campaign. Practice mode (DRY_RUN) stays on until you go live.' },
     { q: 'Does OCE cost anything?', fix: 'No. It runs on your Google account; finding websites uses free Wikipedia and Wikidata; Resend sends up to 100 emails a day free.' },
     { q: 'Where is my data kept?', fix: 'In a Google Sheet in your own Drive, "OCE — Campaign Engine Data". Overview links to it.' },
-    { q: 'Dashboard says "Not connected" or "Unauthorized"', fix: 'Settings → paste the web app URL and API key again → Save & connect.' },
+    { q: 'Dashboard says "Not connected" on a new browser or phone', fix: 'Each browser connects once. On a connected browser open Settings → Connect another browser or phone → Copy link, and open that link on the new one. Or paste the API key in Settings.' },
     { q: 'A mission found few or no websites', fix: 'Add the country, use a broader word ("Banks", "NGOs"), or paste a directory page under Extra starting URLs.' },
     { q: 'A mission sits at 0%', fix: 'Background work runs every 5 minutes. Wait, or click Collect now.' },
     { q: 'Many pages "blocked" or "skipped"', fix: 'Normal. Those websites ask not to be crawled, and OCE respects that.' },

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.1 — 2026-11-24
+
+### Fixed
+- A browser that remembered the address of an older deployment talked to retired v1 code ("URL is required", "Not connected"). The dashboard now checks a saved address once per visit and switches to the current deployment automatically.
+
+### Added
+- One-click connect for new browsers and phones: Settings → "Connect another browser or phone" copies a personal link (`#connect=…`). Opening it connects that browser and removes the key from the address bar; the part after `#` is never sent to any server.
+- The assistant notices an unconnected browser and walks through connecting it; it accepts the key or the connect link.
+
 ## 2.2.0 — 2026-11-24
 
 ### Added
