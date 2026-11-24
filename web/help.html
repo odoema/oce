@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OCE guide — how to use the Campaign Engine</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23134e4a'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%2399f6e4' stroke-width='3'/%3E%3C/svg%3E">
+  <style>
+    :root { --ink:#0f172a; --ink-2:#334155; --muted:#64748b; --line:#e2e8f0; --bg:#f6f7f9; --card:#fff;
+      --brand:#134e4a; --brand-2:#0f766e; --accent:#99f6e4; --sun:#fbbf24; --ok:#15803d; --err:#b91c1c;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      color: var(--ink); background: var(--bg); font-size: 15px; line-height: 1.55; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    a { color: var(--brand-2); }
+    code { background:#eef2f7; padding:1px 6px; border-radius:5px; font-size:13px; }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    button { font: inherit; cursor: pointer; }
+    :focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+
+    /* top bar */
+    .top { background: var(--brand); color: #d1fae5; position: sticky; top: 0; z-index: 20; }
+    .top .wrap { display: flex; align-items: center; gap: 14px; height: 58px; }
+    .logo { width: 32px; height: 32px; border-radius: 9px; flex: none; background: radial-gradient(circle at 50% 50%, transparent 7px, var(--accent) 7.5px, var(--accent) 10.5px, transparent 11px), #0b3b38; }
+    .top strong { color: #fff; letter-spacing: .04em; }
+    .top .back { margin-left: auto; color: var(--brand); background: var(--accent); border-radius: 999px; padding: 6px 14px; font-weight: 700; text-decoration: none; font-size: 13px; white-space: nowrap; }
+    .search { flex: 1; max-width: 320px; margin-left: 12px; }
+    .search input { width: 100%; border: 0; border-radius: 999px; padding: 8px 14px; background: rgba(255,255,255,.12); color: #fff; font: inherit; font-size: 14px; }
+    .search input::placeholder { color: #a7f3d0; }
+    .progressbar { height: 4px; background: rgba(255,255,255,.12); }
+    .progressbar i { display: block; height: 100%; width: 0; background: var(--sun); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+
+    /* hero */
+    .hero { background: linear-gradient(160deg, var(--brand) 0%, #0f5f59 60%, #14806f 100%); color: #ecfdf5; padding: 46px 0 56px; position: relative; overflow: hidden; }
+    .hero h1 { font-size: clamp(28px, 4.5vw, 44px); line-height: 1.1; margin: 0 0 10px; letter-spacing: -.02em; color: #fff; }
+    .hero p.lead { font-size: 18px; max-width: 640px; margin: 0 0 28px; color: #ccfbf1; }
+    .ver { display: inline-block; background: rgba(255,255,255,.14); border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; letter-spacing: .04em; margin-bottom: 14px; }
+    .bubbles span { position: absolute; border-radius: 50%; background: rgba(153,246,228,.08); animation: float 14s ease-in-out infinite; }
+    @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-26px) } }
+
+    /* journey */
+    .journey { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; position: relative; margin-top: 8px; }
+    .journey::before { content: ''; position: absolute; left: 10%; right: 10%; top: 38px; height: 3px; background: repeating-linear-gradient(90deg, rgba(153,246,228,.5) 0 10px, transparent 10px 18px); }
+    .runner { position: absolute; top: 30px; left: 10%; width: 19px; height: 19px; border-radius: 50%; background: var(--sun); box-shadow: 0 0 0 6px rgba(251,191,36,.25); animation: run 9s cubic-bezier(.6,0,.4,1) infinite; }
+    @keyframes run { 0%,8% { left: 9% } 20%,28% { left: 29% } 40%,48% { left: 49% } 60%,68% { left: 69% } 80%,92% { left: 89% } 100% { left: 9% } }
+    .stop { all: unset; display: block; align-self: start; cursor: pointer; text-align: center; position: relative; z-index: 1; border-radius: 14px; padding: 6px 4px 10px; }
+    .stop .ic { width: 78px; height: 78px; border-radius: 22px; margin: 0 auto 10px; display: grid; place-items: center; font-size: 34px; background: #0b3b38; border: 2px solid rgba(153,246,228,.35); transition: transform .25s, background .25s; }
+    .stop:hover .ic, .stop:focus-visible .ic { transform: translateY(-6px) rotate(-4deg); background: #0e4a46; }
+    .stop b { display: block; color: #fff; font-size: 16px; }
+    .stop small { display: block; color: #a7f3d0; font-size: 12.5px; max-width: 170px; margin: 2px auto 0; }
+    .stop .n { position: absolute; top: 0; left: calc(50% + 22px); background: var(--sun); color: var(--brand); width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 800; display: grid; place-items: center; }
+
+    /* sections */
+    section.block { padding: 40px 0 8px; }
+    h2.sec { font-size: 24px; margin: 0 0 4px; letter-spacing: -.01em; }
+    p.sub { color: var(--muted); margin: 0 0 20px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+    .new { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .new li { display: flex; gap: 10px; align-items: flex-start; }
+    .new li::before { content: '✨'; }
+    details.older { margin-top: 12px; color: var(--ink-2); }
+    details.older summary { cursor: pointer; color: var(--brand-2); font-weight: 600; }
+
+    /* chapter cards */
+    .chapters { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+    .chip { all: unset; cursor: pointer; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: grid; gap: 4px; position: relative; transition: transform .2s, box-shadow .2s, border-color .2s; }
+    .chip:hover, .chip:focus-visible { transform: translateY(-3px); box-shadow: 0 10px 24px -12px rgba(15,118,110,.45); border-color: #99f6e4; }
+    .chip .e { font-size: 30px; }
+    .chip b { font-size: 16px; }
+    .chip span { color: var(--muted); font-size: 13.5px; }
+    .chip .done { position: absolute; top: 14px; right: 14px; width: 24px; height: 24px; border-radius: 50%; background: var(--ok); color: #fff; display: none; place-items: center; font-size: 14px; }
+    .chip.is-done .done { display: grid; animation: pop .4s cubic-bezier(.3,1.6,.5,1); }
+    @keyframes pop { from { transform: scale(0) } to { transform: scale(1) } }
+
+    /* chapter detail */
+    .chapter { scroll-margin-top: 76px; padding-top: 34px; }
+    .chapter.hide { display: none; }
+    .ch-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+    .ch-head .e { font-size: 38px; width: 64px; height: 64px; border-radius: 18px; background: #ccfbf1; display: grid; place-items: center; }
+    .ch-head h3 { margin: 0; font-size: 22px; }
+    .ch-head p { margin: 0; color: var(--muted); }
+    .ch-head .open { margin-left: auto; }
+    .btn { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 14px; font-weight: 600; color: var(--ink); text-decoration: none; display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+    .btn.primary { background: var(--brand-2); color: #fff; border-color: var(--brand-2); }
+    .btn:hover { filter: brightness(.97); }
+    .walk { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; align-items: stretch; }
+    .steps { display: grid; gap: 8px; align-content: start; }
+    .step { all: unset; cursor: pointer; display: grid; grid-template-columns: 30px 1fr; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid transparent; }
+    .step .num { width: 30px; height: 30px; border-radius: 50%; background: #e2e8f0; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: var(--ink-2); transition: background .25s; }
+    .step b { display: block; }
+    .step small { color: var(--muted); font-size: 13.5px; }
+    .step.on { background: #f0fdfa; border-color: #99f6e4; }
+    .step.on .num { background: var(--brand-2); color: #fff; }
+    .walk-ctrl { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+    .walk-ctrl .dots { margin-left: auto; color: var(--muted); font-size: 13px; }
+
+    /* mock screen */
+    .mock { background: #f8fafc; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; position: relative; min-height: 290px; box-shadow: 0 20px 40px -28px rgba(15,23,42,.35); }
+    .mock .bar { background: var(--brand); color: #ccfbf1; font-size: 12px; padding: 8px 12px; display: flex; gap: 6px; align-items: center; }
+    .mock .bar i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.25); }
+    .mock .bar b { margin-left: 8px; color: #fff; }
+    .mock .body { padding: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
+    .m-input { width: 100%; font-size: 12px; color: var(--muted); }
+    .m-input div { margin-top: 4px; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; min-height: 36px; color: var(--ink); font-size: 13.5px; transition: border-color .2s, box-shadow .2s; }
+    .m-input.focus div { border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(15,118,110,.15); }
+    .caret { display: inline-block; width: 2px; height: 15px; background: var(--brand-2); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0 } }
+    .m-btn { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 600; transition: transform .12s; }
+    .m-btn.primary { background: var(--brand-2); border-color: var(--brand-2); color: #fff; }
+    .m-btn.press { transform: scale(.92); }
+    .m-select { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 10px; font-size: 13px; }
+    .m-rows { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 12.5px; }
+    .m-rows div { display: grid; grid-template-columns: 22px 1.2fr 1fr 60px; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--line); align-items: center; }
+    .m-rows div:first-child { border-top: 0; color: var(--muted); font-weight: 600; background: #f8fafc; }
+    .m-rows .box { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid #94a3b8; transition: background .2s; }
+    .m-rows .box.on { background: var(--brand-2); border-color: var(--brand-2); }
+    .tag-yes { color: var(--ok); font-weight: 700; } .tag-no { color: var(--err); font-weight: 700; }
+    .m-progress { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 12.5px; }
+    .m-progress .track { height: 8px; border-radius: 99px; background: #e2e8f0; margin-top: 6px; overflow: hidden; }
+    .m-progress .fill { height: 100%; width: 4%; background: linear-gradient(90deg, var(--brand-2), #2dd4bf); border-radius: 99px; transition: width 2.4s cubic-bezier(.3,.7,.3,1); }
+    .cursor { position: absolute; left: 70%; top: 85%; width: 22px; height: 22px; pointer-events: none; transition: left .8s cubic-bezier(.5,0,.2,1), top .8s cubic-bezier(.5,0,.2,1); z-index: 3; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
+    .ripple { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 3px solid var(--sun); animation: ripple .6s ease-out forwards; pointer-events: none; z-index: 2; }
+    @keyframes ripple { to { transform: scale(3.2); opacity: 0 } }
+
+    .tips { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+    .tips li { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 12px 10px 40px; position: relative; font-size: 14px; }
+    .tips li::before { content: '💡'; position: absolute; left: 12px; top: 9px; }
+    .mark { margin-top: 14px; display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 14px; }
+    .mark input { width: 20px; height: 20px; accent-color: var(--ok); }
+
+    /* tools */
+    .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .tool h4 { margin: 0 0 4px; font-size: 17px; }
+    .tool p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+    .tool input[type=text] { width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 12px; font: inherit; }
+    .verdict { margin-top: 12px; padding: 12px; border-radius: 12px; font-size: 14px; transition: background .3s; min-height: 48px; }
+    .verdict.good { background: #dcfce7; } .verdict.meh { background: #fef3c7; } .verdict.bad { background: #fee2e2; } .verdict.idle { background: #f1f5f9; color: var(--muted); }
+    .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .examples button { border: 1px dashed #94a3b8; background: #fff; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; color: var(--ink-2); }
+    .q { display: grid; gap: 8px; }
+    .q .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+    .q .opts button { border: 1px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 8px 14px; font-weight: 600; }
+    .q .opts button:hover { border-color: var(--brand-2); }
+
+    /* checklist + settings + troubles */
+    .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: c; }
+    .checklist li label { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; cursor: pointer; transition: background .25s; }
+    .checklist li input { width: 20px; height: 20px; accent-color: var(--ok); margin: 1px 0 0; }
+    .checklist li input:checked + span { color: var(--muted); text-decoration: line-through; }
+    .meter { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-weight: 600; }
+    .meter .track { flex: 1; height: 10px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .meter .fill { height: 100%; width: 0; background: linear-gradient(90deg, #22c55e, #15803d); transition: width .5s; }
+    table.set { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; border-radius: 12px; overflow: hidden; }
+    table.set th, table.set td { text-align: left; padding: 9px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+    table.set th { background: #f8fafc; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-top: 0; }
+    table.set td:first-child { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; }
+    .seg { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+    .seg button { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 600; }
+    .seg button.on { background: var(--brand-2); color: #fff; border-color: var(--brand-2); }
+    .faq details { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; margin-bottom: 8px; }
+    .faq summary { cursor: pointer; padding: 12px 0; font-weight: 600; list-style: none; display: flex; gap: 10px; }
+    .faq summary::before { content: '＋'; color: var(--brand-2); transition: transform .2s; }
+    .faq details[open] summary::before { transform: rotate(45deg); }
+    .faq details p { margin: 0 0 12px 26px; color: var(--ink-2); }
+    footer { color: var(--muted); font-size: 13px; padding: 40px 0 60px; text-align: center; }
+    .empty { color: var(--muted); padding: 20px; text-align: center; }
+    .hidden { display: none !important; }
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+
+    @media (max-width: 760px) {
+      .journey { grid-template-columns: 1fr 1fr; } .journey::before, .runner { display: none; }
+      .walk, .tools { grid-template-columns: 1fr; } .search { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="logo" aria-hidden="true"></div>
+      <strong>OCE guide</strong>
+      <label class="search"><input id="q" type="search" placeholder="Search the guide… e.g. unsubscribe" aria-label="Search the guide"></label>
+      <a class="back" href="index.html">← Back to dashboard</a>
+    </div>
+    <div class="progressbar" title="Your progress through the guide"><i id="pbar"></i></div>
+  </header>
+
+  <section class="hero">
+    <div class="bubbles" aria-hidden="true"><span style="width:180px;height:180px;right:-40px;top:-40px"></span><span style="width:90px;height:90px;right:22%;bottom:-30px;animation-delay:-5s"></span><span style="width:60px;height:60px;left:6%;top:30px;animation-delay:-9s"></span></div>
+    <div class="wrap">
+      <span class="ver" id="ver">v—</span>
+      <h1>From "who do I want to reach?"<br>to a sent campaign in five steps.</h1>
+      <p class="lead">OCE finds organisations on the public web, collects their published contacts, and emails the ones you approve. Free to run, polite to websites, careful with people's data.</p>
+      <div class="journey" id="journey"><div class="runner" aria-hidden="true"></div></div>
+    </div>
+  </section>
+
+  <main class="wrap">
+    <section class="block" id="whatsnew">
+      <h2 class="sec">What's new</h2>
+      <p class="sub">Updated with every release.</p>
+      <div class="card" id="newBox"></div>
+    </section>
+
+    <section class="block">
+      <h2 class="sec">Pick a chapter</h2>
+      <p class="sub">Each one plays a short animated walkthrough. Tick it off when you've got it.</p>
+      <div class="chapters" id="chips"></div>
+      <p class="empty hidden" id="noHits">Nothing matches that search. Try "send", "csv" or "consent".</p>
+    </section>
+
+    <div id="chapterList"></div>
+
+    <section class="block chapter" id="helpers" data-search="objective checker basis consent legitimate interest helper">
+      <h2 class="sec">Two quick helpers</h2>
+      <p class="sub">Try them. Nothing here touches your data.</p>
+      <div class="tools">
+        <div class="card tool">
+          <h4>🎯 Will my mission find much?</h4>
+          <p>Type what you'd put in "What are you looking for?".</p>
+          <input id="obj" type="text" placeholder="e.g. Hotels in Uganda" autocomplete="off">
+          <div class="examples" id="objEx"></div>
+          <div class="verdict idle" id="objOut">Start typing…</div>
+        </div>
+        <div class="card tool">
+          <h4>⚖️ Which basis should I pick?</h4>
+          <p>Answer a question or two when approving a contact.</p>
+          <div class="q" id="basisBox"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block chapter" id="golive-list" data-search="go live resend send real emails production checklist free">
+      <h2 class="sec">🚀 Go-live checklist</h2>
+      <p class="sub">Free email sending with Resend: 3,000 emails a month, at most 100 a day. Tick as you go; this page remembers.</p>
+      <div class="card">
+        <div class="meter"><span id="glCount">0/0</span><div class="track"><div class="fill" id="glFill"></div></div></div>
+        <ol class="checklist" id="goLive"></ol>
+      </div>
+    </section>
+
+    <section class="block chapter" id="settings-ref" data-search="settings reference default timezone daily limit sending window">
+      <h2 class="sec">⚙️ Every setting, in plain words</h2>
+      <p class="sub">Change them in the dashboard under Settings → Engine settings.</p>
+      <div class="seg" id="setSeg"></div>
+      <table class="set"><thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead><tbody id="setRows"></tbody></table>
+    </section>
+
+    <section class="block chapter faq" id="trouble" data-search="problem error not working help broken troubleshooting">
+      <h2 class="sec">🧰 Something not right?</h2>
+      <p class="sub">The usual suspects, and the fix.</p>
+      <div id="faq"></div>
+    </section>
+  </main>
+
+  <footer>OCE <span id="ver2"></span> · guide updated <span id="upd"></span> · <a href="index.html">Open the dashboard</a></footer>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <script src="manual.js?v=2.2.0"></script>
+  <script src="help.js?v=2.2.0"></script>
+</body>
+</html>

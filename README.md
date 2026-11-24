@@ -9,7 +9,11 @@ Objective ─► Discover ─► Collect ─► Extract ─► Review ─► Con
                                       orgs                  recorded               PRODUCTION  bounces, caps
 ```
 
-## Current release — v2.1.0
+## Current release — v2.2.0
+
+New in 2.2.0: free, keyless discovery (Wikipedia + Wikidata) and an interactive guide built into the dashboard (**Help & guide**, `web/help.html`). The guide is generated from `web/manual.js`, and `tests/manual.test.js` fails CI whenever the app changes without the guide; see [docs/manual.md](docs/manual.md).
+
+### v2.1.0
 
 v2.1 adds **sitemap seeding** (directory sites often list every member page in `sitemap.xml`) and honours **`noindex`/`nofollow`** robots meta tags and `X-Robots-Tag` headers. v2 made the README's original promise work end to end and hardens every step:
 
@@ -59,7 +63,7 @@ apps-script/          Google Apps Script project (one global scope; files load i
   40_Api.gs           authenticated JSON API for the dashboard
   41_Setup.gs         oceSetup, health check, production approval, menu
   50_Migration.gs     v1 → v2 in-place upgrade
-web/                  static dashboard (GitHub Pages)
+web/                  static dashboard (GitHub Pages); help.html + manual.js = the in-app guide
 tests/                mock Apps Script runtime, test suite, local dev server
 docs/                 architecture, deployment, delivery, security, operations
 ```

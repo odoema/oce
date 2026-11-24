@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.0 — 2026-11-24
+
+### Added
+- Free, keyless discovery. Missions find websites from matching Wikipedia "List of …" pages and Wikidata organisations with an official website, scoped to the country. No search API key, account or payment. Results are cached for 6 hours. Brave Search stays optional.
+- Interactive guide built into the dashboard (`web/help.html`, content in `web/manual.js`): animated walkthroughs of each tab, an objective checker, a lawful-basis helper, a go-live checklist, a plain-language settings reference and troubleshooting. Sidebar "Help & guide" link and a "How this works" link on every page.
+- `tests/manual.test.js` keeps the guide in step with the app: version, "What's new", tab coverage, button and field names, and the full settings list are all checked in CI.
+
+### Changed
+- Missions start from up to 20 seed websites (was 10).
+- Removed "add a search key" warnings from the dashboard, setup and health check.
+
 ## 2.1.0 — 2026-11-24
 
 ### Added

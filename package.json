@@ -1,12 +1,12 @@
 {
   "name": "oce",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "description": "OCE — Odoch Campaign Engine: consent-aware discovery, contact review and campaign delivery on Google Apps Script",
   "license": "MIT",
   "engines": { "node": ">=20" },
   "scripts": {
-    "test": "node --test tests/oce.test.js",
+    "test": "node --test tests/oce.test.js tests/manual.test.js",
     "check": "node tests/check-syntax.js",
     "dev": "node tests/dev-server.js"
   }

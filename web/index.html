@@ -6,7 +6,7 @@
   <meta name="referrer" content="no-referrer">
   <title>OCE — Odoch Campaign Engine</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23134e4a'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%2399f6e4' stroke-width='3'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=2.1.0">
+  <link rel="stylesheet" href="styles.css?v=2.2.0">
 </head>
 <body>
 <div class="shell">
@@ -23,6 +23,7 @@
       <button data-view="campaigns">Campaigns</button>
       <button data-view="settings">Settings</button>
     </nav>
+    <a class="help-nav" href="help.html">❓ Help &amp; guide</a>
     <div class="sidebar-foot">
       <div id="connState" class="conn off">Not connected</div>
       <div id="modeBadge" class="mode">—</div>
@@ -35,7 +36,7 @@
     <!-- ================================================================ OVERVIEW -->
     <section id="view-overview" class="view">
       <header class="page-head">
-        <div><h1>Overview</h1><p>Find public organisations, review what was found, and reach the people who agreed to hear from you.</p></div>
+        <div><h1>Overview <a class="guide-link" href="help.html#connect" title="Open the guide for this page">How this works</a></h1><p>Find public organisations, review what was found, and reach the people who agreed to hear from you.</p></div>
         <button class="ghost" data-action="refresh">Refresh</button>
       </header>
       <div id="setupNotice" class="notice warn hidden"></div>
@@ -44,7 +45,7 @@
         <div class="card">
           <h2>Pipeline</h2>
           <ol class="pipeline">
-            <li><b>Discover</b><span>Search + curated registers pick public starting pages.</span></li>
+            <li><b>Discover</b><span>Wikipedia, Wikidata and official registers pick public starting pages. Free, no key.</span></li>
             <li><b>Collect</b><span>Polite crawler: robots.txt, budgets, retries, no login/CAPTCHA bypass.</span></li>
             <li><b>Review</b><span>You approve each contact and record the lawful basis.</span></li>
             <li><b>Send</b><span>Only eligible contacts, inside the sending window, with one-click unsubscribe.</span></li>
@@ -59,7 +60,7 @@
 
     <!-- ================================================================ MISSIONS -->
     <section id="view-missions" class="view hidden">
-      <header class="page-head"><div><h1>Missions</h1><p>Describe who you are looking for. OCE finds public sources and collects them in the background.</p></div></header>
+      <header class="page-head"><div><h1>Missions <a class="guide-link" href="help.html#missions" title="Open the guide for this page">How this works</a></h1><p>Describe who you are looking for. OCE finds public sources and collects them in the background.</p></div></header>
       <div class="card">
         <form id="missionForm" class="mission-form">
           <label for="objective">What are you looking for?</label>
@@ -113,7 +114,7 @@
 
     <!-- ================================================================ REVIEW -->
     <section id="view-review" class="view hidden">
-      <header class="page-head"><div><h1>Review</h1><p>Collected contacts are evidence, not permission. Approve only what you have a lawful basis to contact.</p></div>
+      <header class="page-head"><div><h1>Review <a class="guide-link" href="help.html#review" title="Open the guide for this page">How this works</a></h1><p>Collected contacts are evidence, not permission. Approve only what you have a lawful basis to contact.</p></div>
         <button class="ghost" id="exportCandidates">Export CSV</button></header>
       <div class="card">
         <div class="filters">
@@ -145,7 +146,7 @@
 
     <!-- ================================================================ CONTACTS -->
     <section id="view-contacts" class="view hidden">
-      <header class="page-head"><div><h1>Contacts</h1><p>Your audience. Only <b>eligible</b> contacts can receive campaigns.</p></div></header>
+      <header class="page-head"><div><h1>Contacts <a class="guide-link" href="help.html#contacts" title="Open the guide for this page">How this works</a></h1><p>Your audience. Only <b>eligible</b> contacts can receive campaigns.</p></div></header>
       <div class="card">
         <div class="filters">
           <input id="cSearch" placeholder="Search…">
@@ -167,7 +168,7 @@
 
     <!-- ================================================================ CAMPAIGNS -->
     <section id="view-campaigns" class="view hidden">
-      <header class="page-head"><div><h1>Campaigns</h1><p>Write once, personalise with <code>{{first_name|there}}</code>, <code>{{organization}}</code>. An unsubscribe footer with your postal address is added automatically.</p></div>
+      <header class="page-head"><div><h1>Campaigns <a class="guide-link" href="help.html#campaigns" title="Open the guide for this page">How this works</a></h1><p>Write once, personalise with <code>{{first_name|there}}</code>, <code>{{organization}}</code>. An unsubscribe footer with your postal address is added automatically.</p></div>
         <button class="primary" id="newCampaign">New campaign</button></header>
       <div id="deliveryNotice" class="notice hidden"></div>
       <div class="card">
@@ -205,7 +206,7 @@
 
     <!-- ================================================================ SETTINGS -->
     <section id="view-settings" class="view hidden">
-      <header class="page-head"><div><h1>Settings</h1><p>Connection details stay in this browser only.</p></div></header>
+      <header class="page-head"><div><h1>Settings <a class="guide-link" href="help.html#connect" title="Open the guide for this page">How this works</a></h1><p>Connection details stay in this browser only.</p></div></header>
       <div class="card">
         <h2>Connection</h2>
         <form id="connForm" class="form-grid">
@@ -226,6 +227,6 @@
 </div>
 
 <dialog id="modal"><form method="dialog"><div id="modalBody"></div><div class="btns end"><button class="ghost">Close</button></div></form></dialog>
-<script src="app.js?v=2.1.0"></script>
+<script src="app.js?v=2.2.0"></script>
 </body>
 </html>
