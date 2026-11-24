@@ -6,43 +6,26 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check required files
-        run: |
-          test -f apps-script/Code.gs
-          test -f apps-script/CollectorGateway.gs
-          test -f apps-script/UrlScraper.gs
-          test -f apps-script/SourceRegistry.gs
-          test -f apps-script/QueueWorker.gs
-          test -f apps-script/MissionOrchestrator.gs
-          test -f apps-script/ContactIntelligence.gs
-          test -f apps-script/appsscript.json
-          test -f web/index.html
-          test -f web/app.js
-          test -f web/discovery-brain.js
-          test -f web/scout.js
-          test -f web/mission-control.js
-          test -f README.md
-          test -f docs/security.md
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: Check frontend JavaScript syntax
-        run: |
-          node --check web/app.js
-          node --check web/discovery-brain.js
-          node --check web/scout.js
-          node --check web/mission-control.js
+      - name: Syntax and duplicate-global check
+        run: npm run check
 
-      - name: Check Apps Script syntax
-        run: |
-          for file in apps-script/SourceRegistry.gs apps-script/QueueWorker.gs apps-script/MissionOrchestrator.gs apps-script/CollectorGateway.gs apps-script/UrlScraper.gs apps-script/ContactIntelligence.gs; do
-            node --check < "$file"
-          done
+      - name: Test suite (mock Apps Script runtime)
+        run: npm test
 
-      - name: Check for obvious secret filenames
+      - name: Refuse obvious secret files
         run: |
-          ! find . -type f \( -name '*.env' -o -name 'credentials.json' -o -name 'service-account*.json' -o -name 'client_secret*.json' \) -not -path './.git/*' | grep -q .
+          ! find . -type f \( -name '*.env' -o -name '.clasprc.json' -o -name 'credentials.json' -o -name 'service-account*.json' -o -name 'client_secret*.json' \) -not -path './.git/*' | grep -q .
+          ! grep -rEn "re_[A-Za-z0-9]{20,}|BSA[A-Za-z0-9_-]{20,}" apps-script web docs README.md
