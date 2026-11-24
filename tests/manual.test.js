@@ -25,7 +25,7 @@ function loadConfig() {
 // Visible text of the dashboard (markup + labels rendered by app.js), entities decoded, spaces collapsed.
 function dashboardText() {
   const html = read('web/index.html').replace(/<[^>]+>/g, ' ');
-  const js = read('web/app.js');
+  const js = read('web/app.js') + ' ' + read('web/assistant.js');
   return (html + ' ' + js).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
 }
 
@@ -87,7 +87,23 @@ test('the settings reference lists exactly the engine settings, with the same de
   M.settings.forEach((s) => assert.ok(s.plain && s.plain.length > 8, s.key + ' needs a plain explanation'));
 });
 
+test('assistant logic: objectives, intents and answers behave', () => {
+  const ctx = { window: { OCE_MANUAL: M } };
+  vm.runInNewContext(read('web/guide-logic.js'), ctx);
+  const G = ctx.window.OCE_GUIDE;
+  assert.strictEqual(G.judgeObjective('Banks in Uganda').level, 'good');
+  assert.strictEqual(G.judgeObjective('Audit firms in Kampala, Uganda').level, 'good');
+  assert.ok(G.judgeObjective('Hotels').needsCountry);
+  assert.ok(G.judgeObjective('Companies in Uganda').tooBroad);
+  assert.strictEqual(G.intent('find hotels in Kampala'), 'find');
+  assert.strictEqual(G.intent('I want to send an email to my list'), 'campaign');
+  assert.strictEqual(G.intent('upload my csv'), 'import');
+  assert.strictEqual(G.intent('how do unsubscribes work?'), 'question');
+  assert.ok(G.answer('why is my mission empty').length, 'answers a common question from the manual');
+  ['start', 'b2b', 'customer'].forEach((k) => assert.ok(G.BASIS[G.BASIS[k].yes] && G.BASIS[G.BASIS[k].no], 'basis tree ' + k));
+});
+
 test('help page scripts parse and the guide loads with no browser errors', () => {
-  new vm.Script(read('web/help.js'));
+  ['web/help.js', 'web/assistant.js', 'web/guide-logic.js'].forEach((f) => new vm.Script(read(f), { filename: f }));
   assert.ok(read('web/help.html').includes('manual.js') && read('web/index.html').includes('help.html'), 'dashboard links to the guide');
 });

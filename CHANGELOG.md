@@ -5,9 +5,11 @@
 ### Added
 - Free, keyless discovery. Missions find websites from matching Wikipedia "List of …" pages and Wikidata organisations with an official website, scoped to the country. No search API key, account or payment. Results are cached for 6 hours. Brave Search stays optional.
 - Interactive guide built into the dashboard (`web/help.html`, content in `web/manual.js`): animated walkthroughs of each tab, an objective checker, a lawful-basis helper, a go-live checklist, a plain-language settings reference and troubleshooting. Sidebar "Help & guide" link and a "How this works" link on every page.
+- OCE assistant (`web/assistant.js`): a friendly step-by-step helper in the dashboard ("Ask OCE", bottom right, opens by itself on the first visit). It asks one question at a time with suggestions and does the work through the normal API: finds contacts (checks the objective, previews sources, starts and runs the mission), reviews contacts one by one after asking the lawful basis, drafts and previews a campaign from a template, imports a CSV (with consent), reports status, and answers questions from the guide. Rule-based: no AI service, no cost. Shared logic in `web/guide-logic.js`.
 - `tests/manual.test.js` keeps the guide in step with the app: version, "What's new", tab coverage, button and field names, and the full settings list are all checked in CI.
 
 ### Changed
+- Dashboard default web app address now points at the live deployment.
 - Missions start from up to 20 seed websites (was 10).
 - Removed "add a search key" warnings from the dashboard, setup and health check.
 
