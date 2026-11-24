@@ -9,7 +9,7 @@
  */
 
 var OCE = {
-  VERSION: '2.1.0',
+  VERSION: '2.2.0',
   NAME: 'OCE — Odoch Campaign Engine',
   SPREADSHEET_NAME: 'OCE — Campaign Engine Data',
   SPREADSHEET_PROPERTY: 'OCE_SPREADSHEET_ID',
@@ -56,7 +56,7 @@ var OCE_SCHEMA = {
  * [key, default, description, editableFromApi]
  */
 var OCE_DEFAULT_SETTINGS = [
-  ['VERSION', '2.1.0', 'Installed OCE version', false],
+  ['VERSION', '2.2.0', 'Installed OCE version', false],
   ['TIMEZONE', 'Africa/Kampala', 'IANA timezone used for windows and dates', true],
   ['DEFAULT_COUNTRY_CODE', '256', 'Country calling code used to normalise local phone numbers', true],
   ['CRAWL_ENABLED', 'TRUE', 'Master switch for background collection', true],
