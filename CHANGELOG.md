@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.0 — 2026-11-24
+
+### Added
+- Public PDF documents (member lists, directories, registers, tender notices) are read. Google Drive converts each PDF to text (scanned PDFs via OCR); the temporary Google Doc is deleted straight away. New file `apps-script/15_Documents.gs`.
+- List-aware extraction for documents: every e-mail gets the organisation name and phone from the lines around it, and free-mail domains are not taken as websites.
+- PDF links whose name or label suggests a list (member, firms, register, directory, licensed…) are prioritised; other PDFs are ranked low. At most 4 PDFs are converted per background round; larger than 10 MB are skipped.
+- Setting `CRAWL_PDFS` (default TRUE). "Inspect a single page" works with PDF links.
+- 3 tests.
+
+### Changed
+- New OAuth scope `drive.file` (only files OCE creates). The owner must re-authorise once after deploying: run `oceSetup` in the Apps Script editor and click Allow.
+
 ## 2.2.1 — 2026-11-24
 
 ### Fixed

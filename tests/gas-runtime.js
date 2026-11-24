@@ -170,7 +170,8 @@ function createRuntime(opts = {}) {
     getProjectTriggers: () => state.triggers.slice(),
     deleteTrigger: (t) => { state.triggers = state.triggers.filter((x) => x !== t); },
     newTrigger: (h) => TriggerBuilder(h),
-    getService: () => ({ getUrl: () => state.serviceUrl })
+    getService: () => ({ getUrl: () => state.serviceUrl }),
+    getOAuthToken: () => 'test-token'
   };
 
   const Utilities = {

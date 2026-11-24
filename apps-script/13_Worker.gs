@@ -92,7 +92,7 @@ function oceProcessOutcome_(row, outcome) {
       outcome.ok = false;
       outcome.error = 'noindex: page asks not to be indexed (contact data not collected)';
     } else {
-      var candidates = oceBuildCandidates_(page, { mission_id: missionId });
+      var candidates = outcome.pdf ? oceDocumentCandidates_(outcome, page, missionId) : oceBuildCandidates_(page, { mission_id: missionId });
       out.candidates = oceUpsertCandidates_(candidates).touched;
     }
     var depth = Number(row.depth || 0);
@@ -107,7 +107,7 @@ function oceProcessOutcome_(row, outcome) {
         out.queued = enq.queued;
       }
       // Seeds also contribute their site's sitemap (once per site per mission).
-      if (depth === 0 && oceSettingBool_('CRAWL_USE_SITEMAPS', true)) out.queued += oceSeedFromSitemaps_(mission, row, page, sameSite);
+      if (depth === 0 && !outcome.pdf && oceSettingBool_('CRAWL_USE_SITEMAPS', true)) out.queued += oceSeedFromSitemaps_(mission, row, page, sameSite);
     }
   }
   oceSaveResult_(row, outcome, page, out.candidates);
@@ -151,7 +151,14 @@ function oceScanUrl_(url) {
     url: canonical, final_url: outcome.final_url, http_status: outcome.http_status, title: page.title, description: page.description,
     organization: page.organization, address: page.address, country: page.country, location: page.location, category: page.category,
     emails: page.emails, phones: page.phones, socials: page.socials, jsonld_types: page.jsonld_types,
-    candidates: oceBuildCandidates_(page, {}), top_links: oceScoreLinks_(page, { objective: '' }).slice(0, 25),
+    candidates: outcome.pdf ? oceDocumentCandidates_(outcome, page, '') : oceBuildCandidates_(page, {}),
+    document: outcome.pdf ? { name: outcome.doc_name, characters: String(outcome.text || '').length } : null, top_links: oceScoreLinks_(page, { objective: '' }).slice(0, 25),
     text_excerpt: page.text_excerpt, marketing_consent: 'NOT_ESTABLISHED'
   };
+}
+
+/** Candidates from a PDF: per-entry context for lists, page-level rules as a fallback. */
+function oceDocumentCandidates_(outcome, page, missionId) {
+  var list = oceBuildListCandidates_(outcome.text, outcome.final_url || outcome.url, { mission_id: missionId, doc_name: outcome.doc_name });
+  return list.length ? list : oceBuildCandidates_(page, { mission_id: missionId });
 }
