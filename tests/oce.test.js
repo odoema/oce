@@ -470,6 +470,45 @@ test('discovery: search results ranked, deny-listed hosts removed, catalogue see
   assert.ok(Object.values(perSite).every((n) => n <= 2), 'site diversity');
 });
 
+test('discovery: free open data (Wikipedia list + Wikidata) gives seeds with no API key, cached', () => {
+  const rt = setupRuntime();
+  rt.on(/wikipedia\.org\/w\/api\.php.*list=search/, { status: 200, body: JSON.stringify({ query: { search: [{ title: 'List of banks in Uganda' }, { title: 'Bank of Uganda' }] } }) });
+  rt.on(/wikipedia\.org\/w\/api\.php.*generator=links/, { status: 200, body: JSON.stringify({ query: { pages: {
+    1: { title: 'Stanbic Bank Uganda', pageprops: { wikibase_item: 'Q100' } }, 2: { title: 'Arua', pageprops: { wikibase_item: 'Q200' } }, 3: { title: 'No item' } } } }) });
+  rt.on(/query\.wikidata\.org\/sparql/, (url, opts) => {
+    const q = decodeURIComponent(String(opts.payload).replace(/^format=json&query=/, ''));
+    if (/VALUES \?item/.test(q)) {
+      assert.ok(/wd:Q100/.test(q) && /wd:Q200/.test(q), 'linked items queried');
+      return { status: 200, body: JSON.stringify({ results: { bindings: [
+        { itemLabel: { value: 'Stanbic Bank Uganda' }, web: { value: 'https://www.stanbicbank.co.ug/' }, country: { value: 'http://www.wikidata.org/entity/Q1036' } },
+        { itemLabel: { value: 'Some Kenyan bank' }, web: { value: 'https://kenyabank.co.ke/' }, country: { value: 'http://www.wikidata.org/entity/Q114' } }] } }) };
+    }
+    assert.ok(/wd:Q1036/.test(q) && /bank/.test(q), 'topic query scoped to Uganda');
+    return { status: 200, body: JSON.stringify({ results: { bindings: [
+      { itemLabel: { value: 'Centenary Bank' }, web: { value: 'https://www.centenarybank.co.ug' } },
+      { itemLabel: { value: 'Stanbic Bank Uganda' }, web: { value: 'https://www.stanbicbank.co.ug/' } }] } }) };
+  });
+  rt.fresh();
+  const d = rt.ctx.oceDiscover_('Banks in Uganda', 20);
+  assert.ok(d.via.includes('open-data'), 'via open-data: ' + d.via);
+  const urls = d.seeds.map((s) => s.url);
+  assert.ok(urls.some((u) => /stanbicbank\.co\.ug/.test(u)) && urls.some((u) => /centenarybank\.co\.ug/.test(u)));
+  assert.ok(!urls.some((u) => /kenyabank/.test(u)), 'other-country items dropped');
+  assert.strictEqual(urls.filter((u) => /stanbicbank/.test(u)).length, 1, 'deduplicated');
+  const calls = rt.state.fetchLog.length;
+  rt.ctx.oceDiscover_('Banks in Uganda', 20);
+  assert.strictEqual(rt.state.fetchLog.filter((f) => /wikidata|wikipedia/.test(f.url)).length, rt.state.fetchLog.slice(0, calls).filter((f) => /wikidata|wikipedia/.test(f.url)).length, 'second call served from cache');
+});
+
+test('discovery: open-data topic words drop places and request words', () => {
+  const rt = setupRuntime();
+  const t = rt.ctx.oceOpenDataTopic_('Hotels in Kampala, Uganda contacts');
+  assert.strictEqual(t.phrase, 'hotels');
+  assert.ok(t.stems.includes('hotel') && t.stems.includes('resort'));
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(rt.ctx.oceOpenDataTopic_('NGOs in Uganda').stems)).slice(0, 2), ['non-governmental', 'ngo']);
+  assert.ok(rt.ctx.oceOpenDataTopic_('Companies in Uganda').stems.includes('compan'), 'generic word kept when it is all there is');
+});
+
 /* ------------------------------------------------------------------ migration */
 
 test('v1 data is migrated in place: missions, queue columns, stuck items and candidates', () => {

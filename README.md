@@ -50,7 +50,7 @@ apps-script/          Google Apps Script project (one global scope; files load i
   12_Frontier.gs      persistent crawl queue: budgets, leases, retries
   13_Worker.gs        time-boxed collection rounds
   14_Sitemaps.gs      sitemap.xml seeding (robots-declared, index + gzip, capped, paced)
-  20_Discovery.gs     search providers (Brave, Bing RSS) + curated registers
+  20_Discovery.gs     free discovery (Wikipedia + Wikidata open data, curated registers, Bing RSS); optional Brave
   21_Missions.gs      mission lifecycle and progress
   22_Scheduler.gs     self-disabling 5-minute trigger
   30_Contacts.gs      candidate de-duplication, review gate, contacts, CSV import, suppression

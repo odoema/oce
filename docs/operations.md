@@ -24,7 +24,7 @@
 |---|---|
 | Dashboard: *Unauthorized* | Wrong API key. Run `oceShowApiKey()` |
 | Dashboard: *did not return JSON* | Wrong URL, or the web app is not deployed for *Anyone*. Redeploy a new version |
-| Mission finds few sources | No search key. Add `OCE_SEARCH_API_KEY` (Brave), or add starting URLs under *Options* |
+| Mission finds few sources | The topic is niche (no Wikipedia list or Wikidata entries). Use a broader objective, or add starting URLs under *Options* (a directory or association member page works best) |
 | Many `BLOCKED` pages | The site disallows crawlers or requires login. This is respected by design |
 | Mission ends quickly | Page budget or depth reached. Raise `max_pages` or `max_depth` on a new mission |
 | Collection stalls | Run `oceHealthCheck`. Check that automation is on and `CRAWL_ENABLED=TRUE`, and look in *Executions* for quota errors |

@@ -1,10 +1,11 @@
 /**
  * 20_Discovery: objective -> ranked public starting points (seeds).
  *
- * Providers, in order of preference:
- *   1. Brave Web Search API (Script Properties: OCE_SEARCH_PROVIDER=BRAVE, OCE_SEARCH_API_KEY)
- *   2. Bing RSS (no key; best effort)
- *   3. Curated catalogue of authoritative registers/directories (geography + topic matched)
+ * Providers (all free and keyless unless noted):
+ *   1. Open data: Wikipedia "List of ..." pages + Wikidata official websites (no key, no account)
+ *   2. Curated catalogue of authoritative registers/directories (geography + topic matched)
+ *   3. Bing RSS (no key; best effort, often empty from Google servers)
+ *   4. Optional: Brave Web Search API, only if an owner adds OCE_SEARCH_API_KEY (never required)
  * Search results are candidates only; facts always come from collecting the page itself.
  */
 
@@ -49,7 +50,7 @@ function oceDiscoveryQueries_(objective) {
 
 /** @return {{seeds:Object[], via:string, queries:string[], search_configured:boolean}} */
 function oceDiscover_(objective, limit) {
-  limit = oceClamp_(limit, 1, 30, 10);
+  limit = oceClamp_(limit, 1, 40, 20);
   var queries = oceDiscoveryQueries_(objective);
   var provider = String(oceSecret_('OCE_SEARCH_PROVIDER') || 'BRAVE').toUpperCase();
   var hasKey = !!oceSecret_('OCE_SEARCH_API_KEY');
@@ -64,11 +65,13 @@ function oceDiscover_(objective, limit) {
     if (results.length) via.push('bing-rss');
   }
   var scored = oceRankSearchResults_(results, objective);
+  var open = oceOpenDataSeeds_(objective);
+  if (open.length) via.push('open-data');
   var catalog = oceCatalogSeeds_(objective);
   if (catalog.length) via.push('catalog');
   var merged = [];
   var seen = {};
-  scored.concat(catalog).forEach(function (c) {
+  scored.concat(open, catalog).forEach(function (c) {
     var key = oceCanonicalUrl_(c.url);
     if (!key || seen[key]) return;
     seen[key] = true;
@@ -169,4 +172,152 @@ function oceCatalogSeeds_(objective) {
     if (!match) return null;
     return { name: e.name, url: e.url, score: Math.min(99, Math.round(e.authority * 0.6 + Math.min(match, 3) * 12)), source_type: e.type, reason: 'curated authoritative source' };
   }).filter(Boolean);
+}
+
+/* ---------------------------------------------------------------- open data (free, keyless) */
+
+var OCE_OPEN_DATA = {
+  WIKIPEDIA_API: 'https://en.wikipedia.org/w/api.php',
+  WIKIDATA_SPARQL: 'https://query.wikidata.org/sparql',
+  MAX_SEEDS: 40,
+  MAX_LIST_PAGES: 2,
+  CACHE_SECONDS: 6 * 3600,
+  COUNTRIES: {
+    UG: ['Q1036', 'Uganda'], KE: ['Q114', 'Kenya'], TZ: ['Q924', 'Tanzania'], RW: ['Q1037', 'Rwanda'], BI: ['Q967', 'Burundi'],
+    NG: ['Q1033', 'Nigeria'], GH: ['Q117', 'Ghana'], ZM: ['Q953', 'Zambia'], ET: ['Q115', 'Ethiopia'], ZA: ['Q258', 'South Africa'],
+    GB: ['Q145', 'the United Kingdom'], US: ['Q30', 'the United States']
+  },
+  // Words that describe the request, not the topic.
+  STOP: ['in', 'of', 'the', 'and', 'for', 'with', 'list', 'lists', 'contact', 'contacts', 'email', 'emails', 'phone', 'phones', 'near', 'top', 'best',
+    'all', 'a', 'an', 'to', 'at', 'on', 'by', 'from', 'my', 'our', 'find', 'get', 'leads', 'details', 'address', 'addresses', 'based', 'located', 'around', 'city', 'country'],
+  // Too broad to filter by on their own; used only when nothing else is left.
+  GENERIC: ['company', 'companies', 'firm', 'firms', 'business', 'businesses', 'organisation', 'organisations', 'organization', 'organizations',
+    'service', 'services', 'provider', 'providers', 'agency', 'agencies', 'ltd', 'limited', 'institution', 'institutions'],
+  SYNONYMS: {
+    ngo: ['non-governmental', 'ngo', 'nonprofit', 'non-profit', 'charit'], ngos: ['non-governmental', 'ngo', 'nonprofit', 'non-profit', 'charit'],
+    audit: ['audit', 'accountan'], auditor: ['audit', 'accountan'], accounting: ['accountan', 'audit'], accountant: ['accountan', 'audit'],
+    law: ['law firm', 'advocates', 'legal'], lawyer: ['law firm', 'advocates', 'legal'], advocate: ['advocates', 'law firm'],
+    school: ['school', 'college', 'academy'], hospital: ['hospital', 'clinic', 'medical cent'], hotel: ['hotel', 'resort', 'lodge'],
+    bank: ['bank'], insurance: ['insur'], university: ['universit'], telecom: ['telecom', 'mobile network', 'internet service'],
+    manufacturer: ['manufactur', 'factory', 'industr'], manufacturing: ['manufactur', 'factory', 'industr']
+  }
+};
+OCE_OPEN_DATA.EXTRA_PLACES = ['kampala', 'entebbe', 'jinja', 'gulu', 'mbarara', 'mbale', 'lira', 'arua', 'nairobi', 'mombasa', 'kisumu', 'dar', 'salaam',
+  'kigali', 'lagos', 'abuja', 'accra', 'lusaka', 'addis', 'ababa', 'johannesburg', 'london', 'east', 'africa', 'african', 'uganda', 'ugandan', 'kenya', 'kenyan'];
+
+/** Topic words of an objective with place names and request words removed. */
+function oceOpenDataTopic_(objective) {
+  var places = Object.keys(OCE_COUNTRY_WORDS).join(' ').split(' ').concat(OCE_OPEN_DATA.EXTRA_PLACES);
+  var words = String(objective || '').toLowerCase().replace(/[^a-z\- ]+/g, ' ').split(/\s+/).filter(function (w) {
+    return w.length > 1 && OCE_OPEN_DATA.STOP.indexOf(w) < 0 && places.indexOf(w) < 0;
+  });
+  var specific = words.filter(function (w) { return OCE_OPEN_DATA.GENERIC.indexOf(w) < 0; });
+  var use = specific.length ? specific : words;
+  var stems = [];
+  use.forEach(function (w) {
+    var singular = w.replace(/ies$/, 'y').replace(/sses$/, 'ss').replace(/([^s])s$/, '$1');
+    (OCE_OPEN_DATA.SYNONYMS[w] || OCE_OPEN_DATA.SYNONYMS[singular] || [singular.length > 6 ? singular.slice(0, -1) : singular]).forEach(function (s) { stems.push(s); });
+  });
+  return { phrase: words.join(' ').trim(), stems: oceUnique_(stems).slice(0, 8) };
+}
+
+function oceSparqlRequest_(query) {
+  return { url: OCE_OPEN_DATA.WIKIDATA_SPARQL, method: 'post', muteHttpExceptions: true,
+    contentType: 'application/x-www-form-urlencoded', payload: 'format=json&query=' + encodeURIComponent(query),
+    headers: { 'Accept': 'application/sparql-results+json', 'User-Agent': OCE.USER_AGENT } };
+}
+
+function oceWikiRequest_(params) {
+  var qs = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
+  return { url: OCE_OPEN_DATA.WIKIPEDIA_API + '?format=json&' + qs, method: 'get', muteHttpExceptions: true, headers: { 'User-Agent': OCE.USER_AGENT } };
+}
+
+function oceFetchRequest_(req) {
+  var opts = {};
+  Object.keys(req).forEach(function (k) { if (k !== 'url') opts[k] = req[k]; });
+  return UrlFetchApp.fetch(req.url, opts);
+}
+
+function oceSparqlRows_(res) {
+  if (!res || res.getResponseCode() !== 200) return [];
+  var data = oceParseJson_(res.getContentText(), {});
+  return ((data.results && data.results.bindings) || []).map(function (b) {
+    var row = {};
+    Object.keys(b).forEach(function (k) { row[k] = b[k].value; });
+    return row;
+  });
+}
+
+/**
+ * Free discovery from Wikipedia + Wikidata: organisations with an official website that are
+ * (a) listed on a matching "List of ... in <country>" page, or (b) described with the topic words.
+ * Never throws; returns [] when the sources are slow or unavailable.
+ */
+function oceOpenDataSeeds_(objective) {
+  var code = oceDiscoveryCountry_(objective);
+  var country = OCE_OPEN_DATA.COUNTRIES[code] || null;
+  var topic = oceOpenDataTopic_(objective);
+  if (!topic.phrase || !topic.stems.length) return [];
+  var cacheKey = 'oce:od:' + oceClean_(String(objective).toLowerCase(), 200);
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(cacheKey);
+  if (cached) return oceParseJson_(cached, []);
+
+  var out = [];
+  try {
+    var countryQ = country ? country[0] : '';
+    var listQuery = 'list of ' + topic.phrase + (country ? ' in ' + country[1] : '');
+    var first = [oceWikiRequest_({ action: 'query', list: 'search', srlimit: 5, srsearch: listQuery })];
+    if (countryQ) {
+      // Description/type match within the country. Humans and populated places are excluded.
+      var rx = topic.stems.map(function (s) { return s.replace(/[^a-z\- ]/g, ''); }).filter(Boolean).join('|');
+      first.push(oceSparqlRequest_('SELECT DISTINCT ?item ?itemLabel ?web WHERE { ?item wdt:P17 wd:' + countryQ + '; wdt:P856 ?web. ' +
+        '?item rdfs:label ?l. FILTER(LANG(?l)="en") OPTIONAL{?item schema:description ?d. FILTER(LANG(?d)="en")} ' +
+        'OPTIONAL{?item wdt:P31 ?t. ?t rdfs:label ?tl. FILTER(LANG(?tl)="en")} ' +
+        'FILTER(REGEX(LCASE(CONCAT(STR(?l)," ",COALESCE(STR(?d),"")," ",COALESCE(STR(?tl),""))), "' + rx + '")) ' +
+        'FILTER NOT EXISTS{?item wdt:P31 wd:Q5} FILTER NOT EXISTS{?item wdt:P1082 []} ' +
+        'SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 80'));
+    }
+    var res = UrlFetchApp.fetchAll(first);
+
+    // (a) Wikipedia list pages -> linked articles -> Wikidata official websites.
+    var search = res[0].getResponseCode() === 200 ? oceParseJson_(res[0].getContentText(), {}) : {};
+    var lists = ((search.query && search.query.search) || []).map(function (s) { return s.title; })
+      .filter(function (t) { return /^List of /i.test(t); }).slice(0, OCE_OPEN_DATA.MAX_LIST_PAGES);
+    if (lists.length) {
+      var linked = oceFetchRequest_(oceWikiRequest_({ action: 'query', generator: 'links', gplnamespace: 0, gpllimit: 'max', prop: 'pageprops',
+        ppprop: 'wikibase_item', redirects: 1, titles: lists.join('|') }));
+      var pages = linked.getResponseCode() === 200 ? ((oceParseJson_(linked.getContentText(), {}).query || {}).pages || {}) : {};
+      var qids = Object.keys(pages).map(function (k) { return pages[k].pageprops && pages[k].pageprops.wikibase_item; })
+        .filter(function (q) { return /^Q\d+$/.test(q || ''); }).slice(0, 400);
+      if (qids.length) {
+        var rows = oceSparqlRows_(oceFetchRequest_(oceSparqlRequest_('SELECT ?item ?itemLabel ?web ?country WHERE { VALUES ?item { ' +
+          qids.map(function (q) { return 'wd:' + q; }).join(' ') + ' } ?item wdt:P856 ?web. OPTIONAL{?item wdt:P17 ?country} ' +
+          'FILTER NOT EXISTS{?item wdt:P31 wd:Q5} FILTER NOT EXISTS{?item wdt:P1082 []} ' +
+          'SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }')));
+        rows.forEach(function (r) {
+          if (countryQ && r.country && r.country.split('/').pop() !== countryQ) return;
+          out.push({ name: r.itemLabel, url: r.web, base: 70, reason: 'listed on Wikipedia: ' + lists[0] });
+        });
+      }
+    }
+    // (b) Topic match on Wikidata.
+    if (res[1]) oceSparqlRows_(res[1]).forEach(function (r) { out.push({ name: r.itemLabel, url: r.web, base: 64, reason: 'Wikidata: ' + topic.stems.join('/') + ' with official website' }); });
+  } catch (err) {
+    oceLog_('WARN', 'discovery', 'Open data discovery failed: ' + String(err && err.message || err));
+  }
+
+  var seen = {};
+  var seeds = out.map(function (c) {
+    var url = oceCanonicalUrl_(c.url);
+    if (!url || seen[url] || OCE_DISCOVERY.DENY_HOSTS.test(oceHostOf_(url))) return null;
+    seen[url] = true;
+    var score = c.base;
+    if (code && new RegExp('\\.' + code.toLowerCase() + '$').test(oceHostOf_(url))) score += 8;
+    var hay = (c.name + ' ' + url).toLowerCase();
+    if (topic.stems.some(function (s) { return hay.indexOf(s) >= 0; })) score += 6;
+    return { name: oceClean_(c.name || url, 160), url: url, score: Math.min(95, score), source_type: 'OPEN_DATA', reason: c.reason };
+  }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, OCE_OPEN_DATA.MAX_SEEDS);
+  try { if (seeds.length) cache.put(cacheKey, JSON.stringify(seeds), OCE_OPEN_DATA.CACHE_SECONDS); } catch (e) { /* cache is best effort */ }
+  return seeds;
 }

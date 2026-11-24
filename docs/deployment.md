@@ -42,7 +42,7 @@ GitHub Pages publishes `web/` on every push to `main` (*Deploy OCE Pages UI* wor
 | Property | Needed for |
 |---|---|
 | `OCE_API_KEY`, `OCE_SIGNING_SECRET`, `OCE_WEBHOOK_KEY` | Created by `oceSetup`. Rotate the API key with `oceRotateApiKey()` |
-| `OCE_SEARCH_PROVIDER` = `BRAVE`, `OCE_SEARCH_API_KEY` | Much better discovery (Brave Search API; a free tier exists) |
+| `OCE_SEARCH_PROVIDER` = `BRAVE`, `OCE_SEARCH_API_KEY` | Not needed. Discovery is free by default (Wikipedia, Wikidata, curated registers). Add only if you want paid Brave web search on top |
 | `RESEND_API_KEY` | Delivery through Resend |
 | `OCE_TEST_RECIPIENT` | Your own address for test sends |
 | `OCE_PRODUCTION_APPROVED` | Set by `oceApproveProduction()`. Do not type it by hand |
