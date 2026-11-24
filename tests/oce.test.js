@@ -758,3 +758,20 @@ test('PDF lists: address lines are not names, phones stay inside their own entry
   rt2.fresh();
   assert.equal(rt2.ctx.oceScanUrl_('https://reg.example.org/firms.pdf').candidates.length, 0, 'registration numbers are not phone contacts');
 });
+
+test('uploaded PDF pieces (documents.import): converted, entries saved for review, bad input refused', () => {
+  const rt = setupRuntime();
+  mountDrive(rt, MEMBER_LIST);
+  rt.fresh();
+  const data = Buffer.from('%PDF-1.4 piece').toString('base64');
+  const r = rt.ctx.OCE_API_WRITE['documents.import']({ name: 'firms-2026.pdf', from: 11, to: 20, pages: 120, data });
+  assert.equal(r.found, 3);
+  assert.equal(r.created, 3);
+  const c = rt.sheet('CANDIDATES').objects().find((x) => x.email === 'audit@nsubuga.ug');
+  assert.equal(c.organization, 'Nsubuga Associates');
+  assert.equal(c.review_status, 'PENDING');
+  assert.ok(/firms-2026\.pdf/.test(c.source_urls) && /11/.test(c.evidence));
+  const again = rt.ctx.OCE_API_WRITE['documents.import']({ name: 'firms-2026.pdf', from: 11, to: 20, pages: 120, data });
+  assert.equal(again.created, 0, 're-sending a piece does not duplicate contacts');
+  assert.throws(() => rt.ctx.OCE_API_WRITE['documents.import']({ name: 'x.pdf', data: Buffer.from('hello').toString('base64') }), /not a PDF/);
+});

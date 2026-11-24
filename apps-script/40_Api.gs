@@ -36,6 +36,7 @@ var OCE_API_WRITE = {
   'missions.cancel': function (p) { return oceSetMissionStatus_(oceRequire_(p, 'mission_id'), 'CANCELLED'); },
   'worker.run': function (p) { return oceRunWorker_({ max_seconds: oceClamp_(p.max_seconds, 10, 120, 60), mission_id: p.mission_id || '' }); },
   'candidates.review': function (p) { return oceReviewCandidates_(oceList_(p.ids), oceRequire_(p, 'decision'), { lawful_basis: p.lawful_basis, consent_status: p.consent_status, consent_source: p.consent_source, reviewer: p.reviewer, notes: p.notes, tags: p.tags }); },
+  'documents.import': function (p) { return oceImportPdfPiece_(p); },
   'contacts.import': function (p) { return oceImportCsv_(oceRequire_(p, 'csv'), { source: p.source, tags: p.tags, lawful_basis: p.lawful_basis }); },
   'contacts.update': function (p) { return oceUpdateContacts_(oceList_(p.ids), p.patch || {}); },
   'contacts.suppress': function (p) { oceList_(p.emails).forEach(function (e) { oceSuppress_(e, p.reason || 'MANUAL', 'dashboard'); }); oceFlushAll_(); return { suppressed: oceList_(p.emails).length }; },

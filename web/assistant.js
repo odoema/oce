@@ -51,7 +51,7 @@
   $('oceAsk').addEventListener('click', open);
   $('chatClose').addEventListener('click', close);
   $('chatMenu').addEventListener('click', () => start(mainMenu));
-  window.oceAssistant = { open, start: (name) => { open(); start({ find: findFlow, review: reviewFlow, campaign: campaignFlow, import: importFlow, status: statusFlow }[name] || mainMenu); } };
+  window.oceAssistant = { open, start: (name) => { open(); start({ find: findFlow, review: reviewFlow, campaign: campaignFlow, import: importFlow, pdf: () => pdfFlow(), status: statusFlow }[name] || mainMenu); } };
 
   /* ------------------------------------------------ talking */
   const scroll = () => { log.scrollTop = log.scrollHeight; };
@@ -154,6 +154,7 @@
         { label: '🔎 Find new contacts', value: 'find', primary: true },
         { label: `✅ Review what I found${waiting ? ' (' + num(waiting) + ')' : ''}`, value: 'review' },
         { label: '✍️ Write a campaign', value: 'campaign' },
+        { label: '📄 Read a PDF list', value: 'pdf' },
         { label: '📥 Import my own list', value: 'import' },
         { label: '📊 How am I doing?', value: 'status' },
         { label: '❓ Ask a question', value: 'question' }
@@ -163,8 +164,9 @@
     return route(pick);
   }
   async function route(text) {
-    const id = ['find', 'review', 'campaign', 'import', 'status', 'question', 'connect'].includes(text) ? text : G.intent(text);
-    if (id === 'find') return findFlow(['find', 'review', 'campaign', 'import', 'status', 'question'].includes(text) ? '' : text);
+    const id = ['find', 'review', 'campaign', 'import', 'pdf', 'status', 'question', 'connect'].includes(text) ? text : G.intent(text);
+    if (id === 'pdf') return pdfFlow();
+    if (id === 'find') return findFlow(['find', 'review', 'campaign', 'import', 'pdf', 'status', 'question'].includes(text) ? '' : text);
     if (id === 'review') return reviewFlow();
     if (id === 'campaign') return campaignFlow();
     if (id === 'import') return importFlow();
@@ -419,7 +421,7 @@
   /* ------------------------------------------------ import */
   async function importFlow() {
     await say('Let\'s add people you already know. Save your Excel or Google Sheet as <b>CSV</b>, with a header row. I understand columns like <i>email, name, company, phone, country, consent</i>.');
-    const file = await pickFile();
+    const file = await pickFile('.csv,text/csv', '📎 Choose a CSV file');
     if (!file) return mainMenu();
     if (file.size > 4 * 1024 * 1024) { await say('That file is over 4 MB. Please split it into smaller files.'); return mainMenu(); }
     let csv = await file.text();
@@ -446,12 +448,12 @@
     await say(`📥 Done: <b>${num(r.created)}</b> new, <b>${num(r.updated)}</b> updated${r.skipped ? `, ${num(r.skipped)} skipped (usually a missing or invalid email)` : ''}.`);
     return next([{ label: '✍️ Write a campaign', value: 'campaign' }]);
   }
-  function pickFile() {
+  function pickFile(accept, label) {
     return new Promise((resolve, reject) => {
       const seq = flowSeq;
       const box = document.createElement('div');
       box.className = 'msg bot card-msg';
-      box.innerHTML = '<label class="chat-file">📎 Choose a CSV file<input type="file" accept=".csv,text/csv"></label>';
+      box.innerHTML = `<label class="chat-file">${esc(label)}<input type="file" accept="${esc(accept)}"></label>`;
       log.appendChild(box); scroll();
       ask({ input: false, chips: [{ label: 'Cancel', value: null }] }).then((v) => { if (v === null) resolve(null); }, reject);
       box.querySelector('input').addEventListener('change', (e) => {
@@ -463,6 +465,25 @@
         resolve(f);
       });
     });
+  }
+
+  /* ------------------------------------------------ PDF lists */
+  async function pdfFlow() {
+    await say('Send me a PDF member list, register or directory. I\'ll read <b>every page</b>, even scanned ones: big files are split into small pieces on your computer and read one after another. Each entry goes to Review.');
+    const file = await pickFile('.pdf,application/pdf', '📄 Choose a PDF');
+    if (!file) return mainMenu();
+    const bubble = await say(`📄 <b>${esc(file.name)}</b> (${(file.size / 1048576).toFixed(1)} MB). Getting started…<div class="chat-progress"><i style="width:3%"></i></div><small class="pdf-msg"></small>`, { quick: true });
+    const bar = bubble.querySelector('.chat-progress i'), msg = bubble.querySelector('.pdf-msg');
+    const r = await window.ocePdfImport.importPdf(file, {}, (p) => {
+      bar.style.width = (p.total ? Math.max(3, Math.round(p.done / p.total * 100)) : 3) + '%';
+      msg.textContent = p.message + (p.found ? ` · ${num(p.found)} contacts so far` : '');
+      scroll();
+    });
+    bar.style.width = '100%';
+    refresh();
+    await say(`✅ Read all <b>${num(r.pages)}</b> pages: <b>${num(r.found)}</b> contacts found, <b>${num(r.created)}</b> new ones waiting in Review.` +
+      (r.failed.length ? `<br><small>⚠️ ${r.failed.length} piece(s) couldn't be read (pages ${esc(r.failed.map((x) => x.from + '–' + x.to).join(', '))}). Try the same file again later; contacts already found won't be duplicated.</small>` : ''));
+    return next(r.created ? [{ label: '✅ Review them now', value: 'review' }] : []);
   }
 
   /* ------------------------------------------------ status */

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.0 — 2026-11-24
+
+### Added
+- "Read a PDF list" (Missions page and the assistant): reads a PDF of any length, up to 200 MB. The browser splits it with pdf-lib (MIT, `web/vendor/`) into pieces Google can convert (at most 10 pages and under 2 MB, halved further if needed) and sends them one by one to the new API action `documents.import`, with progress, retries and a summary. This works around Google's OCR limit (2 MB / first 10 pages of a scanned PDF). New `web/pdf-import.js`.
+- Crawled PDFs may now be up to 50 MB (Apps Script's download limit). A large scanned PDF that Google cannot OCR in one go is skipped with a note to use "Read a PDF list".
+
 ## 2.3.1 — 2026-11-24
 
 ### Fixed

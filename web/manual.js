@@ -11,10 +11,14 @@
  * See docs/manual.md for how to update it.
  */
 window.OCE_MANUAL = {
-  version: '2.3.1',
+  version: '2.4.0',
   updated: '2026-11-24',
 
   whatsNew: {
+    '2.4.0': [
+      'Read a PDF list of any size: on Missions (or ask the assistant), choose a PDF and OCE reads every page, even scanned ones. Your computer splits big files into small pieces and OCE reads them one after another, with a progress bar.',
+      'PDFs found on websites can now be up to 50 MB.'
+    ],
     '2.3.1': ['PDF reading switched on: OCE now enables Google Drive\'s converter for itself, so PDF lists work without any setup.'],
     '2.3.0': [
       'OCE now reads PDFs: member lists, directories and registers published as PDF files, including scanned ones. Each entry keeps its own organisation name and phone.',
@@ -121,7 +125,7 @@ window.OCE_MANUAL = {
     {
       id: 'missions', icon: '🔎', title: 'Find contacts', tagline: 'A mission is one search job: "find me X".',
       covers: ['missions'], open: 'missions',
-      ui: ['What are you looking for?', 'Start mission', 'Preview sources first', 'Collect now', 'Extra starting URLs (optional, one per line)', 'Page budget', 'Link depth', 'Inspect a single page', 'Scan'],
+      ui: ['Read a PDF list', 'Read PDF', 'What are you looking for?', 'Start mission', 'Preview sources first', 'Collect now', 'Extra starting URLs (optional, one per line)', 'Page budget', 'Link depth', 'Inspect a single page', 'Scan'],
       steps: [
         { title: 'Say who you want', text: 'A kind of organisation plus a country works best: "Banks in Uganda".', mock: { screen: 'missions', type: { into: 'What are you looking for?', text: 'Banks in Uganda' } } },
         { title: 'Peek first (optional)', text: 'Preview sources first shows which websites OCE plans to visit.', mock: { screen: 'missions', click: 'Preview sources first' } },
@@ -131,7 +135,8 @@ window.OCE_MANUAL = {
       tips: [
         'Niche group? Paste a member directory or association list under Options → Extra starting URLs. It is the most reliable way in.',
         'Inspect a single page: paste one address and click Scan to see what OCE would pick up, without starting a mission. It works with PDF links too.',
-        'PDF member lists count: OCE reads them (even scanned ones) and gives each entry its own name and phone. Scanned PDFs read best under 2 MB; only their first 10 pages are read.',
+        'Got the list as a PDF file? Use "Read a PDF list" on Missions (or tell the assistant). Any length works: big files are split into 10-page pieces on your computer and every page is read, scanned ones included. Up to 200 MB per file.',
+        'PDF links found on websites are read too (up to 50 MB). A big scanned PDF found online is better downloaded and read with "Read a PDF list".',
         'OCE is polite: it obeys each website\'s robots.txt, waits between pages, and never logs in or bypasses CAPTCHAs.'
       ]
     },
@@ -191,7 +196,7 @@ window.OCE_MANUAL = {
 
   /* Every key of OCE_DEFAULT_SETTINGS, with its default and a plain explanation. */
   settings: [
-    { key: 'VERSION', def: '2.3.1', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
+    { key: 'VERSION', def: '2.4.0', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
     { key: 'TIMEZONE', def: 'Africa/Kampala', plain: 'Clock used for sending hours and dates.', group: 'System' },
     { key: 'DEFAULT_COUNTRY_CODE', def: '256', plain: 'Turns 0772… into +256772….', group: 'System' },
     { key: 'CRAWL_ENABLED', def: 'TRUE', plain: 'Master switch for finding and collecting.', group: 'Finding' },
@@ -228,7 +233,8 @@ window.OCE_MANUAL = {
     { q: 'How do unsubscribes work?', fix: 'Every email has an unsubscribe link (and a one-click unsubscribe header). When someone uses it, OCE blocks that address permanently; no campaign can reach it again.' },
     { q: 'Will OCE email anyone without my approval?', fix: 'No. Found contacts wait in Review until you approve them with a basis, and nothing sends until you activate a campaign. Practice mode (DRY_RUN) stays on until you go live.' },
     { q: 'Does OCE cost anything?', fix: 'No. It runs on your Google account; finding websites uses free Wikipedia and Wikidata; Resend sends up to 100 emails a day free.' },
-    { q: 'Can OCE read PDF files?', fix: 'Yes. Public PDFs such as member lists and registers are converted to text with Google Drive\'s free converter (scanned ones too) and each entry becomes its own contact. Paste a PDF link as a starting website, or into Inspect a single page.' },
+    { q: 'Can OCE read PDF files?', fix: 'Yes. On Missions use "Read a PDF list" (or ask the assistant) for a file on your computer: any length up to 200 MB, every page read, scanned ones too. PDF links on websites are read automatically (up to 50 MB). Each entry becomes its own contact in Review.' },
+    { q: 'My PDF is bigger than 2 MB or longer than 10 pages', fix: 'No problem. "Read a PDF list" splits it on your computer into pieces Google can read (10 pages, under 2 MB) and reads them one after another until the whole file is done.' },
     { q: 'Where is my data kept?', fix: 'In a Google Sheet in your own Drive, "OCE — Campaign Engine Data". Overview links to it.' },
     { q: 'Dashboard says "Not connected" on a new browser or phone', fix: 'Each browser connects once. On a connected browser open Settings → Connect another browser or phone → Copy link, and open that link on the new one. Or paste the API key in Settings.' },
     { q: 'A mission found few or no websites', fix: 'Add the country, use a broader word ("Banks", "NGOs"), or paste a directory page under Extra starting URLs.' },

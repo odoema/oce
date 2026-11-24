@@ -83,6 +83,7 @@ window.OCE_GUIDE = (function () {
     { id: 'find', words: ['find', 'search', 'look', 'discover', 'mission', 'new contact', 'lead', 'prospect', 'scrape', 'crawl', 'collect'] },
     { id: 'review', words: ['review', 'approve', 'reject', 'pending', 'waiting', 'check contact', 'sort'] },
     { id: 'campaign', words: ['campaign', 'send', 'email', 'e-mail', 'newsletter', 'write', 'message', 'blast'] },
+    { id: 'pdf', words: ['pdf', 'document', 'scanned', 'brochure'] },
     { id: 'import', words: ['import', 'upload', 'csv', 'excel', 'my list', 'spreadsheet', 'add contact'] },
     { id: 'status', words: ['status', 'how am i', 'progress', 'stats', 'numbers', 'summary', 'overview', 'doing'] },
     { id: 'connect', words: ['connect', 'api key', 'login', 'link the', 'set up', 'setup'] }

@@ -487,3 +487,18 @@ $('shareCopy').addEventListener('click', async () => {
 show(views.includes(location.hash.slice(1)) ? location.hash.slice(1) : (store.key ? 'overview' : 'settings'));
 // Keep the sidebar badges (mode, pending reviews) current regardless of the opening view.
 if (store.key && current !== 'overview') api('dashboard').then((d) => setConn(true, d)).catch(() => {});
+
+/* ------------------------------------------------------------------ PDF lists (web/pdf-import.js) */
+$('pdfRead').addEventListener('click', (e) => guard(async () => {
+  const f = $('pdfFile').files[0];
+  if (!f) throw new Error('Choose a PDF file first.');
+  $('pdfProgress').classList.remove('hidden');
+  const r = await window.ocePdfImport.importPdf(f, { tags: $('pdfTags').value }, (p) => {
+    $('pdfBar').style.width = (p.total ? Math.max(3, Math.round(p.done / p.total * 100)) : 3) + '%';
+    $('pdfMsg').textContent = p.message + (p.found ? ` · ${num(p.found)} contacts so far` : '');
+  });
+  $('pdfBar').style.width = '100%';
+  $('pdfMsg').textContent = `Read ${num(r.pages)} pages: ${num(r.found)} contacts found, ${num(r.created)} new in Review.` + (r.failed.length ? ` ${r.failed.length} piece(s) failed (pages ${r.failed.map((x) => x.from + '–' + x.to).join(', ')}); try again later.` : '');
+  toast(`PDF read: ${num(r.found)} contacts. Check Review.`, r.failed.length ? 'warn' : 'ok');
+  api('dashboard').then((d) => setConn(true, d)).catch(() => {});
+}, e.currentTarget));

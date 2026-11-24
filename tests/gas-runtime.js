@@ -188,6 +188,7 @@ function createRuntime(opts = {}) {
     computeDigest: (_alg, msg) => toSigned(crypto.createHash('sha256').update(msg, 'utf8').digest()),
     DigestAlgorithm: { SHA_256: 'SHA_256' },
     Charset: { UTF_8: 'UTF_8' },
+    base64Decode: (s) => toSigned(Buffer.from(String(s), 'base64')),
     base64EncodeWebSafe: (s) => Buffer.from(String(s), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
     base64DecodeWebSafe: (s) => toSigned(Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
     newBlob: (bytes) => ({ getDataAsString: (cs) => toBuffer(bytes).toString(cs && /8859|latin/i.test(cs) ? 'latin1' : 'utf8'), getBytes: () => bytes }),
