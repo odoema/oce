@@ -183,25 +183,9 @@
     history.replaceState(null, '', '#' + id);
   }
 
-  /* ---------- objective checker (mirrors the engine's discovery rules) */
-  const COUNTRIES = ['uganda', 'ugandan', 'kampala', 'entebbe', 'jinja', 'gulu', 'mbarara', 'mbale', 'kenya', 'kenyan', 'nairobi', 'mombasa', 'tanzania', 'dar es salaam', 'rwanda', 'kigali', 'burundi', 'nigeria', 'lagos', 'ghana', 'accra', 'zambia', 'ethiopia', 'south africa', 'united kingdom', 'usa', 'united states'];
-  const OPEN_DATA = ['bank', 'hotel', 'resort', 'lodge', 'university', 'college', 'school', 'hospital', 'insurance', 'ngo', 'non-profit', 'charity', 'telecom', 'airline', 'newspaper', 'radio', 'television', 'museum', 'embassy', 'ministry', 'agency', 'authority', 'manufactur', 'sacco', 'microfinance', 'church', 'football club', 'stadium'];
-  const REGISTERS = { audit: 'ICPAU\'s register of licensed firms', accountan: 'ICPAU\'s register of licensed firms', lawyer: 'the Uganda Law Society', advocate: 'the Uganda Law Society', 'law firm': 'the Uganda Law Society', doctor: 'the medical council', clinic: 'the medical council', startup: 'the Startup Uganda directory', tour: 'the Uganda Tourism Board' };
-  const GENERIC = ['company', 'companies', 'business', 'businesses', 'firm', 'firms', 'organisation', 'organisations', 'organization', 'organizations', 'people', 'contacts', 'leads', 'everyone'];
-  function judge(text) {
-    const t = ' ' + text.toLowerCase().replace(/[^a-z\- ]+/g, ' ').replace(/\s+/g, ' ') + ' ';
-    if (text.trim().length < 3) return ['idle', 'Start typing…'];
-    const place = COUNTRIES.find((c) => t.includes(' ' + c + ' '));
-    const words = t.trim().split(' ').filter((w) => w.length > 2 && !['in', 'the', 'and', 'for', 'with', 'list', 'all'].includes(w) && !COUNTRIES.some((c) => c.split(' ').includes(w)));
-    const specific = words.filter((w) => !GENERIC.includes(w));
-    const open = OPEN_DATA.find((k) => t.includes(k));
-    const regKey = Object.keys(REGISTERS).find((k) => t.includes(k));
-    if (!specific.length) return ['bad', '🤔 Too broad. Say what kind: "Hotels in Uganda", "NGOs in Kenya", "Insurance companies in Uganda".'];
-    if (!place) return ['meh', '📍 Add a country, e.g. "' + text.trim() + ' in Uganda". OCE uses it to pick the right sources and phone format.'];
-    if (open) return ['good', '🎉 Great objective. Wikipedia and Wikidata list these with their official websites, so expect plenty of starting points.'];
-    if (regKey) return ['good', '👍 Good. These are rarely on Wikipedia, but OCE goes straight to ' + REGISTERS[regKey] + '.'];
-    return ['meh', '🙂 OCE will try, but this group is niche. For best results, paste a directory or association member page under Options → Extra starting URLs.'];
-  }
+  /* ---------- objective checker (shared logic: guide-logic.js) */
+  const G = window.OCE_GUIDE;
+  const judge = (text) => { const v = G.judgeObjective(text); return [v.level, v.message]; };
   const objIn = $('obj'), objOut = $('objOut');
   const runJudge = () => { const [cls, msg] = judge(objIn.value); objOut.className = 'verdict ' + cls; objOut.textContent = msg; };
   objIn.addEventListener('input', runJudge);
@@ -209,15 +193,7 @@
   $('objEx').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { objIn.value = b.textContent; runJudge(); }));
 
   /* ---------- basis helper */
-  const TREE = {
-    start: { q: 'Did this person or organisation say yes to hearing from you? (a form, a sign-up sheet, a written yes)', yes: 'consent', no: 'b2b' },
-    b2b: { q: 'Is it a business contact at a work address, and does your offer clearly fit their job?', yes: 'li', no: 'customer' },
-    customer: { q: 'Are they already your customer?', yes: 'contract', no: 'none' },
-    consent: { a: '✅ Pick "Basis: consent obtained" and type where the yes came from (e.g. "Expo 2026 sign-up sheet"). OCE can email them.', cls: 'good' },
-    li: { a: '🟡 Pick "Basis: legitimate interest (B2B)". OCE only emails these after you switch ALLOW_LEGITIMATE_INTEREST to TRUE in Settings. Keep emails short, relevant, and easy to opt out of.', cls: 'meh' },
-    contract: { a: '🟡 Pick "Basis: existing customer/contract" to keep the record, but OCE won\'t email on that alone. Ask them to opt in, then record consent.', cls: 'meh' },
-    none: { a: '⛔ Don\'t email them. Choose "Basis: none yet" or Reject. You need a yes first.', cls: 'bad' }
-  };
+  const TREE = G.BASIS;
   function basis(node) {
     const n = TREE[node];
     const box = $('basisBox');

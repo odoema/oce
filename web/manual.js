@@ -17,6 +17,7 @@ window.OCE_MANUAL = {
   whatsNew: {
     '2.2.0': [
       'Finding websites is now free: OCE reads Wikipedia lists and Wikidata. No search key, no account, no payment.',
+      'Meet the OCE assistant: click "Ask OCE" (bottom right) and it walks you through finding contacts, reviewing them, writing a campaign or importing a list, one friendly question at a time.',
       'This interactive guide, built into the dashboard (the Help link in the sidebar).',
       'Missions start from up to 20 websites instead of 10.'
     ],
@@ -39,6 +40,13 @@ window.OCE_MANUAL = {
 
   /* Small fake screens used by the animated walkthroughs. Labels must match the dashboard exactly. */
   mockScreens: {
+    assistant: { title: 'Ask OCE', items: [
+      { kind: 'button', label: 'Find new contacts', primary: true },
+      { kind: 'button', label: 'Review what I found' },
+      { kind: 'button', label: 'Write a campaign' },
+      { kind: 'button', label: 'Import my own list' },
+      { kind: 'input', label: 'Your answer' }
+    ] },
     settings: { title: 'Settings', items: [
       { kind: 'input', label: 'Web app URL (/exec)' },
       { kind: 'input', label: 'API key', secret: true },
@@ -76,6 +84,18 @@ window.OCE_MANUAL = {
   },
 
   chapters: [
+    {
+      id: 'assistant', icon: '💬', title: 'Let the assistant guide you', tagline: 'Answer a few questions; it does the clicking.',
+      covers: ['overview'], open: 'overview',
+      ui: ['Ask OCE', 'Let OCE guide you', 'How am I doing?', 'Ask a question'],
+      steps: [
+        { title: 'Open it', text: 'Click "Ask OCE" at the bottom right of any page, or a button on Overview.', mock: { screen: 'assistant' } },
+        { title: 'Pick what you want', text: 'Find contacts, review them, write a campaign, import a list, or just ask.', mock: { screen: 'assistant', click: 'Find new contacts' } },
+        { title: 'Answer in your own words', text: 'Tap a suggestion or type. It checks your answer and explains what happens next.', mock: { screen: 'assistant', type: { into: 'Your answer', text: 'Hotels in Kampala, Uganda' } } },
+        { title: 'It does the work', text: 'It starts the mission, shows contacts one by one, drafts the email and previews it, using the same safe rules.', mock: { screen: 'assistant', click: 'Review what I found' } }
+      ],
+      tips: ['Menu (top of the chat) always takes you back to the start.', 'You can type things like "find NGOs in Kenya" or "how do unsubscribes work?".', 'It never sends anything without you choosing Activate, and practice mode stays on until you go live.']
+    },
     {
       id: 'connect', icon: '🔌', title: 'Connect the dashboard', tagline: 'Once per browser. Takes a minute.',
       covers: ['settings', 'overview'], open: 'settings',
@@ -193,6 +213,10 @@ window.OCE_MANUAL = {
   ],
 
   troubles: [
+    { q: 'How do unsubscribes work?', fix: 'Every email has an unsubscribe link (and a one-click unsubscribe header). When someone uses it, OCE blocks that address permanently; no campaign can reach it again.' },
+    { q: 'Will OCE email anyone without my approval?', fix: 'No. Found contacts wait in Review until you approve them with a basis, and nothing sends until you activate a campaign. Practice mode (DRY_RUN) stays on until you go live.' },
+    { q: 'Does OCE cost anything?', fix: 'No. It runs on your Google account; finding websites uses free Wikipedia and Wikidata; Resend sends up to 100 emails a day free.' },
+    { q: 'Where is my data kept?', fix: 'In a Google Sheet in your own Drive, "OCE — Campaign Engine Data". Overview links to it.' },
     { q: 'Dashboard says "Not connected" or "Unauthorized"', fix: 'Settings → paste the web app URL and API key again → Save & connect.' },
     { q: 'A mission found few or no websites', fix: 'Add the country, use a broader word ("Banks", "NGOs"), or paste a directory page under Extra starting URLs.' },
     { q: 'A mission sits at 0%', fix: 'Background work runs every 5 minutes. Wait, or click Collect now.' },

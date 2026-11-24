@@ -39,6 +39,11 @@
         <div><h1>Overview <a class="guide-link" href="help.html#connect" title="Open the guide for this page">How this works</a></h1><p>Find public organisations, review what was found, and reach the people who agreed to hear from you.</p></div>
         <button class="ghost" data-action="refresh">Refresh</button>
       </header>
+      <div class="guide-cta">
+        <span class="ask-face" aria-hidden="true">●‿●</span>
+        <div><b>Not sure where to start? Let OCE guide you.</b><span>Answer a few simple questions and the assistant does the work with you.</span></div>
+        <div class="btns"><button data-assistant="find">🔎 Find contacts</button><button data-assistant="review" class="ghosty">✅ Review</button><button data-assistant="campaign" class="ghosty">✍️ Write a campaign</button></div>
+      </div>
       <div id="setupNotice" class="notice warn hidden"></div>
       <div class="kpis" id="kpis"></div>
       <div class="grid-2">
@@ -228,5 +233,8 @@
 
 <dialog id="modal"><form method="dialog"><div id="modalBody"></div><div class="btns end"><button class="ghost">Close</button></div></form></dialog>
 <script src="app.js?v=2.2.0"></script>
+<script src="manual.js?v=2.2.0"></script>
+<script src="guide-logic.js?v=2.2.0"></script>
+<script src="assistant.js?v=2.2.0"></script>
 </body>
 </html>

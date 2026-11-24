@@ -1,7 +1,7 @@
 /* OCE dashboard — vanilla JS, no build step. Talks to the Apps Script web app (apps-script/40_Api.gs). */
 'use strict';
 
-const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxLpeSVROLACHa2i6CIlWddMSmKdoyKAaZ7QJmJWDVW-1s_LCM9JyrllYeZHGQFPmCO/exec';
+const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyVoWhSEcCOtpHnv-Ca4V2VETc1l2i1AKQUKSVVcX-W_RxTmXHfihkYEvHE1LyLgS1f/exec';
 const store = {
   get endpoint() { return localStorage.getItem('oce.endpoint') || DEFAULT_ENDPOINT; },
   get key() { return localStorage.getItem('oce.key') || ''; },
