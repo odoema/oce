@@ -8,12 +8,14 @@
  *  - Needs the narrow Drive scope `drive.file` (only files OCE itself creates). The Drive advanced service is
  *    declared in appsscript.json only so Google enables the Drive API for the script's hidden Cloud project.
  *    Setting CRAWL_PDFS turns PDF reading off.
- *  - Limits: Google reads scanned PDFs best under 2 MB and OCRs only their first 10 pages. Text PDFs convert fully.
+ *  - Limits: Google OCRs scanned PDFs only up to about 2 MB / 10 pages, so the dashboard's "Read a PDF list"
+ *    splits uploads into such pieces in the browser (web/pdf-import.js) and sends them here one by one.
+ *    Crawled PDFs: up to 50 MB (Apps Script download limit); text PDFs convert fully.
  */
 
 var OCE_DOCS = {
   PDF_TYPES: /application\/(pdf|x-pdf)|application\/acrobat/i,
-  MAX_PDF_BYTES: 10 * 1024 * 1024,
+  MAX_PDF_BYTES: 50 * 1024 * 1024, // Apps Script cannot download more than about 50 MB
   MAX_PDFS_PER_RUN: 4,
   MAX_LIST_CANDIDATES: 400,
   FREE_MAIL: /(^|\.)(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|aol|icloud|me|proton|protonmail|zoho|mail|gmx|yandex)\.[a-z.]+$/i,
@@ -64,7 +66,7 @@ function ocePdfToText_(bytes, name) {
 /** Fills a fetch outcome from a PDF response. Called by the fetcher. */
 function oceClassifyPdf_(o, bytes) {
   if (!oceSettingBool_('CRAWL_PDFS', true)) { o.status = 'SKIPPED'; o.error = 'PDF reading is switched off (CRAWL_PDFS)'; return; }
-  if (bytes.length > OCE_DOCS.MAX_PDF_BYTES) { o.status = 'SKIPPED'; o.error = 'PDF larger than 10 MB'; return; }
+  if (bytes.length > OCE_DOCS.MAX_PDF_BYTES) { o.status = 'SKIPPED'; o.error = 'PDF larger than 50 MB: download it and use "Read a PDF list" in the dashboard'; return; }
   if (oceDocsState_.converted >= OCE_DOCS.MAX_PDFS_PER_RUN) { o.status = 'RETRY'; o.error = 'PDF waits for the next round'; return; }
   oceDocsState_.converted++;
   var name = decodeURIComponent(String((oceParseUrl_(o.final_url || o.url) || {}).path || '').split('/').pop() || 'document.pdf');
@@ -74,6 +76,12 @@ function oceClassifyPdf_(o, bytes) {
     o.status = /permission/i.test(err.message) ? 'FAILED' : 'RETRY';
     o.error = String(err.message || err);
     oceLog_('WARN', 'documents', o.error, { url: o.final_url || o.url });
+    return;
+  }
+  if (bytes.length > 2 * 1024 * 1024 && o.text.replace(/\s+/g, '').length < 200) {
+    // Google only OCRs scanned PDFs up to about 2 MB / 10 pages; the dashboard upload splits them so every page is read.
+    o.status = 'SKIPPED';
+    o.error = 'Large scanned PDF: download it and use "Read a PDF list" in the dashboard to read every page';
     return;
   }
   o.pdf = true;
@@ -171,4 +179,27 @@ function oceLooksLikeName_(s) {
   if (letters < 3 || digits > letters / 2) return false;
   if (/^(p\.?\s?o\.?\s?box|plot|tel|phone|fax|mob|email|e-mail|address|website|location|physical address|postal)\b/i.test(s)) return false;
   return OCE_DOCS.ORG_HINT.test(s) || /^[A-Z][A-Za-z&'.,-]+(\s+[A-Z&][A-Za-z&'.,-]*){0,8}$/.test(s) || s === s.toUpperCase();
+}
+
+/**
+ * One piece of an uploaded PDF (split in the browser by web/pdf-import.js): converts it and saves the
+ * contacts it lists as candidates for review. Pieces are independent, so a failed piece can be resent.
+ * @param {{name:string, from:number, to:number, pages:number, data:string, tags?:string}} p data = base64 PDF bytes
+ */
+function oceImportPdfPiece_(p) {
+  var name = oceClean_(p.name || 'upload.pdf', 120);
+  var data = String(p.data || '');
+  if (!data) throw new Error('Missing parameter: data');
+  if (data.length > 4 * 1024 * 1024) throw new Error('This piece is too large (over 3 MB). The dashboard splits PDFs automatically; please reload it and try again.');
+  var bytes = Utilities.base64Decode(data);
+  if (!oceIsPdfResponse_('', bytes, '')) throw new Error('That piece is not a PDF.');
+  var range = 'pages ' + Number(p.from || 1) + '–' + Number(p.to || p.from || 1);
+  var text = ocePdfToText_(bytes, name + ' ' + range);
+  var source = 'upload:' + name + '#' + range.replace(/\s/g, '');
+  var list = oceBuildListCandidates_(text, source, { doc_name: name + ' (' + range + ')', mission_id: '' });
+  if (p.tags) list.forEach(function (c) { c.category = c.category || ''; c.evidence = oceClean_(c.evidence + ' | tags: ' + p.tags, 600); });
+  var up = oceUpsertCandidates_(list);
+  oceLog_('INFO', 'documents', 'Uploaded PDF ' + name + ' ' + range + ': ' + list.length + ' contacts', { created: up.created });
+  oceFlushAll_();
+  return { name: name, from: Number(p.from || 1), to: Number(p.to || 1), characters: String(text || '').length, found: list.length, created: up.created };
 }

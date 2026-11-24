@@ -98,6 +98,7 @@ test('assistant logic: objectives, intents and answers behave', () => {
   assert.strictEqual(G.intent('find hotels in Kampala'), 'find');
   assert.strictEqual(G.intent('I want to send an email to my list'), 'campaign');
   assert.strictEqual(G.intent('upload my csv'), 'import');
+  assert.strictEqual(G.intent('read my pdf list'), 'pdf');
   assert.strictEqual(G.intent('how do unsubscribes work?'), 'question');
   assert.ok(G.answer('why is my mission empty').length, 'answers a common question from the manual');
   ['start', 'b2b', 'customer'].forEach((k) => assert.ok(G.BASIS[G.BASIS[k].yes] && G.BASIS[G.BASIS[k].no], 'basis tree ' + k));
@@ -111,7 +112,21 @@ test('PDF reading: the Drive advanced service is declared (enables the Drive API
   assert.ok(!m.oauthScopes.includes('https://www.googleapis.com/auth/drive'), 'no full-Drive scope');
 });
 
+test('big PDFs are split in the browser into pieces Google can read (pdf-lib)', async () => {
+  const PDFLib = require(path.join(root, 'web/vendor/pdf-lib.min.js'));
+  const { splitPdf } = require(path.join(root, 'web/pdf-import.js'));
+  const doc = await PDFLib.PDFDocument.create();
+  for (let i = 0; i < 25; i++) doc.addPage([200, 200]).drawText('Page ' + (i + 1));
+  const bytes = await doc.save();
+  const r = await splitPdf(PDFLib, bytes);
+  assert.strictEqual(r.total, 25);
+  assert.deepStrictEqual(r.pieces.map((p) => [p.from, p.to]), [[1, 10], [11, 20], [21, 25]]);
+  for (const p of r.pieces) assert.strictEqual((await PDFLib.PDFDocument.load(p.bytes)).getPageCount(), p.to - p.from + 1);
+  const tiny = await splitPdf(PDFLib, bytes, { maxBytes: 10 });
+  assert.strictEqual(tiny.pieces.length, 25, 'pieces over the byte limit are halved down to single pages');
+});
+
 test('help page scripts parse and the guide loads with no browser errors', () => {
-  ['web/help.js', 'web/assistant.js', 'web/guide-logic.js'].forEach((f) => new vm.Script(read(f), { filename: f }));
+  ['web/help.js', 'web/assistant.js', 'web/guide-logic.js', 'web/pdf-import.js'].forEach((f) => new vm.Script(read(f), { filename: f }));
   assert.ok(read('web/help.html').includes('manual.js') && read('web/index.html').includes('help.html'), 'dashboard links to the guide');
 });
