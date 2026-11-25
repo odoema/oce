@@ -196,10 +196,154 @@ function oceImportPdfPiece_(p) {
   var range = 'pages ' + Number(p.from || 1) + '–' + Number(p.to || p.from || 1);
   var text = ocePdfToText_(bytes, name + ' ' + range);
   var source = 'upload:' + name + '#' + range.replace(/\s/g, '');
-  var list = oceBuildListCandidates_(text, source, { doc_name: name + ' (' + range + ')', mission_id: '' });
+  var ctx = { doc_name: name + ' (' + range + ')', mission_id: '' };
+  var register = oceLooksLikeRegister_(text);
+  var list = register ? oceBuildRegisterCandidates_(text, source, ctx) : oceBuildListCandidates_(text, source, ctx);
+  var withContact = list.filter(function (c) { return c.email || c.phone; }).length;
   if (p.tags) list.forEach(function (c) { c.category = c.category || ''; c.evidence = oceClean_(c.evidence + ' | tags: ' + p.tags, 600); });
   var up = oceUpsertCandidates_(list);
   oceLog_('INFO', 'documents', 'Uploaded PDF ' + name + ' ' + range + ': ' + list.length + ' contacts', { created: up.created });
   oceFlushAll_();
-  return { name: name, from: Number(p.from || 1), to: Number(p.to || 1), characters: String(text || '').length, found: list.length, created: up.created };
+  return { name: name, from: Number(p.from || 1), to: Number(p.to || 1), characters: String(text || '').length, found: list.length, created: up.created,
+    with_contact: withContact, organisations_only: list.length - withContact, register: register };
+}
+
+/* ---------------------------------------------------------------- registers (lists without e-mails) */
+
+var OCE_REGISTER = {
+  // Where an address starts inside an entry (also used to split "NAME ADDRESS" written on one line).
+  ADDRESS_START: /(\b\d+(st|nd|rd|th)\s+floor\b|\bground floor\b|\bfloor\b|\bplot\b|\bsuite\b|\broom\b|\brm\b|\bblock\b|\bp\.?\s?o\.?\s?box\b|\bbox\s+\d|\bopp(osite)?\.?\b|\bnext to\b|\bnear\b|\bbehind\b|\boff\b\s+\w+\s+(road|rd|street)|\b[\w'’-]+\s+(house|h['’]se|building|bldg|plaza|tower|towers|towers|centre|center|complex|mall|arcade|chambers|court|courts|estate|market|square|heights|headquarters|hotel)\b|\b[\w'’-]+\s+(road|rd|street|st|avenue|ave|lane|close|crescent|drive|bypass|way)\b)/i,
+  NAME_END: /\b(advocates?|solicitors?|consultants?|& co\.?|and co\.?|company|associates|partners|ltd|limited|llp|plc|inc|chambers|group|firm|department|dept|unit|division|directorate)\)?\.?\s*$/i,
+  NAME_THEN_ADDRESS: /^(.*?\b(advocates?|solicitors?|consultants?|& co\.?|ltd|limited|associates|partners|department)\)?\.?)\s+(?=\S[^,]*,)/i,
+  PLACES: ['kampala', 'wakiso', 'mukono', 'entebbe', 'jinja', 'gulu', 'lira', 'mbarara', 'hoima', 'masaka', 'fort portal', 'arua', 'mbale', 'kabale', 'iganga', 'busia', 'tororo', 'soroti',
+    'luwero', 'kayunga', 'masindi', 'mityana', 'mubende', 'kasese', 'bushenyi', 'ntungamo', 'rukungiri', 'kitgum', 'moroto', 'kotido', 'nebbi', 'pakwach', 'koboko', 'yumbe',
+    'adjumani', 'moyo', 'kapchorwa', 'pallisa', 'kumi', 'kamuli', 'bugiri', 'mayuge', 'kalangala', 'rakai', 'lyantonde', 'sembabule', 'mpigi', 'butambala', 'gomba', 'kiboga',
+    'kyankwanzi', 'nakaseke', 'nakasongola', 'kiruhura', 'ibanda', 'isingiro', 'kisoro', 'kanungu', 'kagadi', 'kibaale', 'kyenjojo', 'kamwenge', 'bundibugyo', 'ntoroko',
+    'apac', 'kole', 'oyam', 'dokolo', 'amolatar', 'alebtong', 'otuke', 'pader', 'agago', 'amuru', 'nwoya', 'omoro', 'napak', 'nakapiripirit', 'amudat', 'kaabong', 'abim',
+    'katakwi', 'amuria', 'kaberamaido', 'serere', 'ngora', 'bukedea', 'budaka', 'butaleja', 'namutumba', 'luuka', 'buyende', 'kaliro', 'namayingo', 'bududa', 'manafwa',
+    'sironko', 'bulambuli', 'kween', 'bukwo', 'buikwe', 'buvuma', 'kyotera', 'kalungu', 'bukomansimbi', 'lwengo', 'lugazi', 'njeru', 'nansana', 'kira', 'makindye',
+    'luweero', 'kyegegwa', 'mitooma', 'sheema', 'shema', 'rubirizi', 'buhweju', 'kazo', 'rwampara', 'kitagwenda', 'bunyangabu', 'kikuube', 'kakumiro',
+    'namisindwa', 'butebo', 'bugweri', 'kapelebyong', 'kalaki', 'karenga', 'nabilatuk', 'obongi', 'terego', 'madi okollo', 'rubanda', 'kiryandongo', 'buliisa', 'zombo', 'maracha',
+    'kyankwanzi', 'bukomansimbi', 'kabarole', 'kabwohe', 'ishaka', 'kanungu', 'kiboga', 'busembatya', 'nebbi', 'lugazi', 'matugga', 'gayaza', 'bweyogerere', 'mutundwe', 'najjera',
+    'nairobi', 'mombasa', 'kisumu', 'kigali', 'dar es salaam', 'juba']
+};
+
+/**
+ * Numbered registers (law firms, licensed practitioners, approved suppliers…): each entry becomes an
+ * organisation lead with its name, address and town, plus any e-mail or phone it carries. Used when a
+ * document lists many numbered entries but few e-mails.
+ * @return {Object[]} candidates; leads without e-mail or phone have contact_level 'ORGANISATION_ONLY'
+ */
+function oceBuildRegisterCandidates_(text, url, ctx) {
+  var entries = oceSplitRegisterEntries_(text);
+  var docName = ctx && ctx.doc_name || '';
+  var out = [];
+  entries.forEach(function (lines) {
+    var parsed = oceParseRegisterEntry_(lines);
+    if (!parsed.name) return;
+    var joined = lines.join('\n');
+    var emails = oceCollectEmails_(joined, []);
+    var phones = oceCollectPhones_(joined, []);
+    var score = 40 + (parsed.address ? 8 : 0) + (parsed.location ? 4 : 0) + (emails.length ? 15 : 0) + (phones.length ? 10 : 0);
+    out.push({
+      email: emails[0] || '', phone: phones[0] || '', organization: parsed.name, website: emails[0] && !OCE_DOCS.FREE_MAIL.test(emails[0].split('@')[1]) ? 'https://' + emails[0].split('@')[1] : '',
+      address: parsed.address, country: oceDetectCountry_(joined) || (parsed.location && OCE_REGISTER.PLACES.indexOf(parsed.location.toLowerCase()) >= 0 && OCE_REGISTER.PLACES.indexOf(parsed.location.toLowerCase()) < OCE_REGISTER.PLACES.indexOf('nairobi') ? 'Uganda' : ''),
+      location: parsed.location, category: oceInferCategory_(parsed.name + ' ' + docName), person_name: '', role: '', source_url: url, mission_id: ctx && ctx.mission_id || '',
+      confidence: Math.min(100, score), contact_level: emails.length || phones.length ? 'CONTACT' : 'ORGANISATION_ONLY',
+      evidence: oceClean_('Listed in' + (docName ? ' "' + docName + '"' : ' a register') + ' as no. ' + parsed.number + ': ' + parsed.name + (parsed.address ? ', ' + parsed.address : '') + (parsed.location ? ', ' + parsed.location : '') +
+        (emails.length || phones.length ? '' : ' (no e-mail or phone in the document)'), 600)
+    });
+  });
+  return out;
+}
+
+/** Splits text into numbered entries ("12. NAME …" or "12." alone on a line). Headers before entry 1 are dropped. */
+function oceSplitRegisterEntries_(text) {
+  var lines = String(text || '').replace(/\t/g, '\n').split('\n').map(function (l) {
+    // Table headings repeated on every page, sometimes glued to the line above ("… KAMPALA NO. LEGAL DEPARTMENT LOCATION DISTRICT").
+    return l.replace(/\s+/g, ' ').replace(/\s*\bNO\.?\s+[A-Z' ]{0,40}?\bLOCATION\s+DISTRICT\b.*$/i, '').trim();
+  }).filter(Boolean);
+  var entries = [];
+  var cur = null;
+  lines.forEach(function (l) {
+    var m = l.match(/^(\d{1,4})[.)]\s*(.*)$/);
+    if (m && !/^\d{1,4}[.)]\s*\d/.test(l)) {
+      if (cur) entries.push(cur);
+      cur = [l];
+      return;
+    }
+    if (/^(no\.?|s\/?n|#)?\s*(law firm|name|firm|organi[sz]ation|company|legal dep\w*)\b.*\b(location|address|district|town)\b/i.test(l) || /\blocation\s+district\s*$/i.test(l)) return; // repeated table header
+    if (/^list of\b/i.test(l) && /\b(as at|as of|\d{4})\b/i.test(l)) return; // repeated page title
+    if (cur) cur.push(l);
+  });
+  if (cur) entries.push(cur);
+  return entries;
+}
+
+/** {number, name, address, location} from the lines of one register entry. */
+function oceParseRegisterEntry_(lines) {
+  var first = lines[0].match(/^(\d{1,4})[.)]\s*(.*)$/);
+  var number = first ? first[1] : '';
+  var rest = [first ? first[2] : lines[0]].concat(lines.slice(1)).filter(function (l) { return l; });
+  var nameParts = [];
+  var addrParts = [];
+  var inAddress = false;
+  rest.forEach(function (l) {
+    if (inAddress) { addrParts.push(l); return; }
+    // "A.L ADVOCATES 5TH FLOOR, PAN AFRICA HOUSE, …": split where the address starts.
+    var m = l.match(OCE_REGISTER.ADDRESS_START);
+    if (nameParts.length && m && m.index === 0) { addrParts.push(l); inAddress = true; return; } // a line that starts with an address
+    var nt = !OCE_REGISTER.NAME_END.test(nameParts.join(' ')) ? l.match(OCE_REGISTER.NAME_THEN_ADDRESS) : null;
+    if (nt && (!m || nt[1].length <= m.index)) {
+      nameParts.push(nt[1].trim());
+      addrParts.push(l.slice(nt[0].length).trim());
+      inAddress = true;
+      return;
+    }
+    var nameSoFar = nameParts.join(' ');
+    var looksDone = OCE_REGISTER.NAME_END.test(nameSoFar);
+    if (nameParts.length && looksDone && !/^\(/.test(l) && !/^(&|and)\b|^(advocates?|solicitors?|consultants?|legal|associates?|& co)\b/i.test(l)) {
+      addrParts.push(l); inAddress = true; return; // the name is complete, so a new line starts the address
+    }
+    if (m && (m.index > 0 || nameParts.length) && (looksDone || m.index > 0)) {
+      var before = l.slice(0, m.index).trim();
+      if (before && !(nameParts.length && looksDone && !OCE_REGISTER.NAME_END.test(before) && before.split(' ').length > 3)) nameParts.push(before);
+      else if (before) addrParts.push(before);
+      addrParts.push(l.slice(m.index).trim());
+      inAddress = true;
+      return;
+    }
+    if (m && !nameParts.length) { addrParts.push(l); inAddress = true; return; }
+    if (looksDone && !/^\(/.test(l) && !/^(&|and)\b|^(advocates?|solicitors?|consultants?|legal|associates?|& co)\b/i.test(l) && /,/.test(l)) {
+      addrParts.push(l); inAddress = true; return;
+    }
+    nameParts.push(l);
+  });
+  var address = addrParts.join(' ').replace(/\s+,/g, ',').replace(/\s+/g, ' ').trim();
+  // District/town: a trailing known place name (the last column of most registers).
+  var location = '';
+  var low = address.toLowerCase();
+  var places = OCE_REGISTER.PLACES.slice().sort(function (a, b) { return b.length - a.length; });
+  for (var i = 0; i < places.length; i++) {
+    var p = places[i];
+    if (low === p || (low.length > p.length && low.slice(-p.length - 1) === ' ' + p) || low.slice(-p.length - 1) === ',' + p) {
+      location = p.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+      address = address.slice(0, address.length - p.length).replace(/[\s,]+$/, '');
+      break;
+    }
+  }
+  if (!location && /^[A-Za-z' -]{3,20}$/.test(addrParts[addrParts.length - 1] || '') && addrParts.length > 1) {
+    location = addrParts[addrParts.length - 1].replace(/\b\w+/g, function (w) { return w.charAt(0) + w.slice(1).toLowerCase(); });
+    address = addrParts.slice(0, -1).join(' ');
+  }
+  var name = nameParts.join(' ').replace(/\s+/g, ' ').replace(/\s+([,.)])/g, '$1').trim();
+  name = name.replace(/\b([A-Z][A-Z'’&.-]+)\b/g, function (w) { return w.length <= 3 && /^(&|CO\.?|LLP|PLC|LTD|AB|AN|AM|AD|AL)$/.test(w) ? w : w; });
+  return { number: number, name: oceClean_(name, 160), address: oceClean_(address, 300), location: location };
+}
+
+/** True when a document reads like a numbered register rather than a contact list. */
+function oceLooksLikeRegister_(text) {
+  var numbered = (String(text || '').match(/(^|\n)\s*\d{1,4}[.)]\s/g) || []).length;
+  var emails = (String(text || '').match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || []).length;
+  return numbered >= 5 && emails < numbered / 3;
 }

@@ -342,9 +342,26 @@
   /* ------------------------------------------------ campaign */
   async function campaignFlow() {
     const [d, segs] = await Promise.all([api('dashboard'), api('segments.list').catch(() => [])]);
-    const eligible = d.contacts.eligible;
+    let eligible = d.contacts.eligible;
+    if (!eligible && d.contacts.total) {
+      const el = await api('contacts.eligibility');
+      if (el.reasons.NO_LAWFUL_BASIS) {
+        await say(`You have <b>${num(el.total)}</b> contacts, but <b>none</b> can be emailed yet: ${num(el.reasons.NO_LAWFUL_BASIS)} have no recorded reason why you may email them. Let's fix that with a couple of questions.`);
+        const b = await basisQuestions();
+        if (b.basis === 'CONSENT' || b.basis === 'LEGITIMATE_INTEREST') {
+          await say(b.basis === 'CONSENT' ? `Just to be sure: <b>all ${num(el.reasons.NO_LAWFUL_BASIS)}</b> said yes via "${esc(b.source)}"?` : `Just to be sure: <b>all ${num(el.reasons.NO_LAWFUL_BASIS)}</b> are business contacts, and your email is relevant to their work?`, { quick: true });
+          if (await yesNo('Yes, that\'s true for all of them', 'No, not all of them')) {
+            const r = await post('contacts.fix_basis', { basis: b.basis, consent_source: b.source || '', confirm: 'true' });
+            eligible = r.eligible;
+            await say(`✅ Recorded. <b>${num(r.eligible)}</b> contacts can now be emailed.`);
+          } else {
+            await say('OK, nothing changed. Open <b>Contacts</b> to set it person by person, or approve them again in Review with the right basis.');
+          }
+        }
+      }
+    }
     if (!eligible) {
-      await say('Right now <b>nobody</b> can be emailed: approve contacts with consent first (or import a list where people said yes). You can still write a draft.');
+      await say('Right now <b>nobody</b> can be emailed. You can still write a draft.');
       const a = await ask({ input: false, chips: [{ label: '✍️ Write a draft anyway', value: 'go' }, { label: '✅ Review contacts', value: 'review' }, { label: '📥 Import a list', value: 'import' }] });
       if (a !== 'go') return route(a);
     }
@@ -403,12 +420,31 @@
         await say(r.sent ? `📨 Sent a test to ${esc(r.recipient)}. Check your inbox!` : 'The test failed: ' + esc((r.failed || []).join('; ')));
         continue;
       }
+      const when = await askStart();
+      if (when) await post('campaigns.save', { campaign: { campaign_id: c.campaign_id, start_at: when.toISOString() } });
       await post('campaigns.status', { campaign_id: c.campaign_id, status: 'ACTIVE' });
       refresh();
+      if (when) await say(`⏰ Scheduled: it starts sending <b>${esc(when.toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}</b>.`);
       await say(mode === 'DRY_RUN'
         ? '✅ Activated in <b>practice mode</b>: I go through every step, but nothing leaves Google. You\'ll see "(sim)" counts in Campaigns. When you\'re ready for real sending, follow the go-live checklist.'
         : '✅ Activated! I send in small batches on weekdays, 09:00–17:00 Kampala time, within your daily limit. Every email has an unsubscribe link.');
       return next([{ label: '📊 How am I doing?', value: 'status' }]);
+    }
+  }
+  /** "When should it start?" Returns a Date, or null for "as soon as possible". */
+  async function askStart() {
+    await say('When should it start sending?', { quick: true });
+    const at9 = (d) => { d.setHours(9, 0, 0, 0); return d; };
+    const tomorrow = at9(new Date(Date.now() + 864e5));
+    const monday = at9(new Date()); monday.setDate(monday.getDate() + ((8 - monday.getDay()) % 7 || 7));
+    for (;;) {
+      const v = await ask({ chips: [{ label: '▶ Now (within sending hours)', value: 'now', primary: true }, { label: '🌅 Tomorrow 9:00', value: 'tomorrow' }, { label: '📅 Next Monday 9:00', value: 'monday' }], placeholder: 'Or type a date and time, e.g. 2026-12-01 09:00' });
+      if (v === 'now') return null;
+      if (v === 'tomorrow') return tomorrow;
+      if (v === 'monday') return monday;
+      const t = new Date(String(v).trim().replace(' ', 'T'));
+      if (!isNaN(t) && t > new Date()) return t;
+      await say('I couldn\'t read that as a future date. Try like <code>2026-12-01 09:00</code>.');
     }
   }
   function friendlyProblem(p) {
@@ -476,12 +512,13 @@
     const bar = bubble.querySelector('.chat-progress i'), msg = bubble.querySelector('.pdf-msg');
     const r = await window.ocePdfImport.importPdf(file, {}, (p) => {
       bar.style.width = (p.total ? Math.max(3, Math.round(p.done / p.total * 100)) : 3) + '%';
-      msg.textContent = p.message + (p.found ? ` · ${num(p.found)} contacts so far` : '');
+      msg.textContent = p.message + (p.found ? ` · ${num(p.found)} found so far` : '');
       scroll();
     });
     bar.style.width = '100%';
     refresh();
-    await say(`✅ Read all <b>${num(r.pages)}</b> pages: <b>${num(r.found)}</b> contacts found, <b>${num(r.created)}</b> new ones waiting in Review.` +
+    await say('✅ ' + esc(window.ocePdfImport.summary(r)) +
+      (r.orgOnly && !r.withContact ? '<br><small>Tip: you can still export them (Review → Export CSV), or start a mission with the firms\' websites if you know them.</small>' : '') +
       (r.failed.length ? `<br><small>⚠️ ${r.failed.length} piece(s) couldn't be read (pages ${esc(r.failed.map((x) => x.from + '–' + x.to).join(', '))}). Try the same file again later; contacts already found won't be duplicated.</small>` : ''));
     return next(r.created ? [{ label: '✅ Review them now', value: 'review' }] : []);
   }

@@ -775,3 +775,64 @@ test('uploaded PDF pieces (documents.import): converted, entries saved for revie
   assert.equal(again.created, 0, 're-sending a piece does not duplicate contacts');
   assert.throws(() => rt.ctx.OCE_API_WRITE['documents.import']({ name: 'x.pdf', data: Buffer.from('hello').toString('base64') }), /not a PDF/);
 });
+
+test('PDF registers without e-mails (Uganda Law Society list excerpt): each firm becomes a lead with name, address and district', () => {
+  const rt = setupRuntime();
+  const text = "LIST OF APPROVED LAW FIRMS 2025 AS AT 29TH SEPTEMBER, 2025\nNO LAW FIRM LOCATION DISTRICT\n1. A. MARVIN & CO. \nADVOCATES\nBUTIABA ROAD, ABA BUILDING, OPP \nKOLPING HOTEL, NEXT TO MAYORS RD HOIMA\n2. A. MWEBESA & CO. \nADVOCATES \n3RD FLOOR, SUITE 3, PLATINUM HOUSE, \nPLOT 3, COLVILLE STREET KAMPALA\n3. A. MWEBESA & COMPANY \nADVOCATES \nGROUND FLOOR, SUITE 1, PELY HOUSE, \nBISHOP TUCKER ROAD MUKONO\n4. A.D. OWOR ADVOCATES & \nSOLICITORS \nSUITE AC 15, 4TH FLOOR, TTA COMPLEX, \nPLOT 541, IVAN CLOSE, MUYENGA KAMPALA\n5. A.L ADVOCATES 5TH FLOOR, PAN AFRICA HOUSE, PLOT 3, \nKIMATHI AVENUE KAMPALA\n6.\nA.M & CO. ADVOCATES \n(FORMERLY A. MURANGIRA \nADVOCATES) \nSUITE No. BM-04, 3RD FLOOR, BUKENYA \nMALL, PLOT 2, KIMERA ROAD, NTINDA KAMPALA\n7. A.M ATUHAIRWE & CO. \nADVOCATES\nPLOT 29-37, NTINDA ROAD, ROOFTOP, \nFT- 05, NTINDA COMPLEX KAMPALA\n8. A.N KIGOZI & CO. \nADVOCATES \n2ND FLOOR, AMA HOUSE, PLOT 2419, \nPRESS HOUSE ROAD, KIBULI, BEHIND \nCID HEADQUARTERS\nKAMPALA\n9. AB & DAVID ADVOCATES PLOT 6-8, NAKASERO LANE, KISOZI \nCOMPLEX  KAMPALA\n10. ABAINE-BUREGYEYA & CO. \nADVOCATES \nPLOT 16/18, WILLIAM STREET, KALUNGI \nPLAZA, 4TH FLOOR, SUITE 411 KAMPALA\n\nDEPARTMENT \nPLOT 1769, JINJA RD, NAMANVE KAMPALA\n3. AIRTEL UGANDA LIMITED \u2013 \nLEGAL DEPARTMENT \nAIRTEL TOWERS, PLOT 16A, CLEMENT \nHILL ROAD, NAKASERO KAMPALA\n4. BAGEINE & COMPANY LIMITED \n\u2013 LEGAL DEPARTMENT\n5TH FLOOR, INTERSERVICE TOWER, \nPLOT 33, LUMUMBA AVENUE KAMPALA\n5. BANK OF AFRICA \u2013 LEGAL \nDEPARTMENT P";
+  mountDrive(rt, text);
+  rt.fresh();
+  assert.ok(rt.ctx.oceLooksLikeRegister_(text));
+  const r = rt.ctx.OCE_API_WRITE['documents.import']({ name: 'LIST-OF-APPROVED-LAW-FIRMS-2025.pdf', from: 1, to: 10, pages: 12, data: Buffer.from('%PDF-1.4').toString('base64') });
+  assert.equal(r.register, true);
+  assert.ok(r.found >= 12, 'firms found: ' + r.found);
+  assert.equal(r.with_contact, 0);
+  assert.equal(r.organisations_only, r.found);
+  const rows = rt.sheet('CANDIDATES').objects();
+  const by = (name) => rows.find((c) => c.organization === name);
+  assert.equal(by('A. MWEBESA & CO. ADVOCATES').address, '3RD FLOOR, SUITE 3, PLATINUM HOUSE, PLOT 3, COLVILLE STREET');
+  assert.equal(by('A. MWEBESA & CO. ADVOCATES').location, 'Kampala');
+  assert.equal(by('A. MARVIN & CO. ADVOCATES').location, 'Hoima');
+  assert.equal(by('A.L ADVOCATES').address, '5TH FLOOR, PAN AFRICA HOUSE, PLOT 3, KIMATHI AVENUE', 'name and address split on one line');
+  assert.ok(by('A.M & CO. ADVOCATES (FORMERLY A. MURANGIRA ADVOCATES)'), 'multi-line names kept whole');
+  assert.equal(by('A. MWEBESA & COMPANY ADVOCATES').location, 'Mukono', 'same firm, other branch kept separately');
+  const airtel = rows.find((c) => /^AIRTEL UGANDA LIMITED/.test(c.organization));
+  assert.ok(airtel && /LEGAL DEPARTMENT$/.test(airtel.organization) && /^AIRTEL TOWERS, PLOT 16A/.test(airtel.address), JSON.stringify(airtel && [airtel.organization, airtel.address]));
+  assert.ok(!rows.some((c) => /LOCATION DISTRICT|^LIST OF/i.test(c.organization + ' ' + c.address)), 'page titles and table headings ignored');
+  assert.ok(rows.every((c) => c.review_status === 'PENDING' && !c.email && /no e-mail or phone/.test(c.evidence)));
+});
+
+test('campaign scheduling: future start waits, past stop completes the campaign, bad schedules are explained', () => {
+  const rt = setupRuntime();
+  rt.ctx.oceSetSetting_('SENDER_POSTAL_ADDRESS', 'P.O. Box 1, Kampala');
+  rt.ctx.oceSetSetting_('DEFAULT_FROM_EMAIL', 'hello@oce.example');
+  rt.ctx.oceSetSetting_('PUBLIC_WEB_APP_URL', 'https://script.google.com/macros/s/X/exec');
+  rt.fresh();
+  const NOW = WORKDAY_10AM.getTime();
+  const future = new Date(NOW + 3 * 864e5).toISOString();
+  const c = rt.ctx.oceSaveCampaign_({ name: 'Later', subject: 'Hi', body_html: '<p>Hi</p>', start_at: future });
+  assert.equal(c.schedule.state, 'SCHEDULED');
+  const bad = rt.ctx.oceSaveCampaign_({ name: 'Bad', subject: 'Hi', body_html: '<p>Hi</p>', start_at: future, end_at: new Date(NOW + 864e5).toISOString() });
+  assert.ok(bad.problems.some((p) => /stop date must be after/.test(p)));
+  const old = rt.ctx.oceSaveCampaign_({ name: 'Old', subject: 'Hi', body_html: '<p>Hi</p>' });
+  rt.fresh();
+  rt.ctx.oceTable_('CAMPAIGNS').update(rt.ctx.oceTable_('CAMPAIGNS').get('campaign_id', old.campaign_id), { status: 'ACTIVE', end_at: new Date(NOW - 3600e3).toISOString() });
+  rt.ctx.oceFlushAll_();
+  rt.fresh();
+  assert.equal(rt.ctx.oceHasActiveCampaign_(), false, 'expired campaign no longer keeps automation awake');
+  assert.equal(rt.ctx.oceTable_('CAMPAIGNS').get('campaign_id', old.campaign_id).status, 'COMPLETED');
+});
+
+test('eligibility: approved contacts without a basis are explained and fixed only with confirmation', () => {
+  const rt = setupRuntime();
+  rt.ctx.oceImportCsv_('email,name,company\na@firm.example,Ann,Firm A\nb@firm.example,Ben,Firm B', { source: 'test' });
+  rt.fresh();
+  let e = rt.ctx.oceEligibilitySummary_();
+  assert.equal(e.eligible, 0);
+  assert.equal(e.reasons.NO_LAWFUL_BASIS, 2);
+  assert.throws(() => rt.ctx.OCE_API_WRITE['contacts.fix_basis']({ basis: 'LEGITIMATE_INTEREST' }), /confirm/);
+  assert.throws(() => rt.ctx.OCE_API_WRITE['contacts.fix_basis']({ basis: 'CONSENT', confirm: 'true' }), /where the consent came from/);
+  const r = rt.ctx.OCE_API_WRITE['contacts.fix_basis']({ basis: 'LEGITIMATE_INTEREST', confirm: 'true' });
+  assert.equal(r.updated, 2);
+  assert.equal(r.eligible, 2);
+  assert.equal(rt.ctx.oceSettingBool_('ALLOW_LEGITIMATE_INTEREST', false), true);
+});
