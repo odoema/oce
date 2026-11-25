@@ -298,6 +298,7 @@ $('exportCandidates').addEventListener('click', (e) => guard(async () => {
 /* ------------------------------------------------------------------ contacts */
 let contactPage = 1;
 async function loadContacts() {
+  loadEligibility().catch(() => {});
   await guard(async () => {
     const d = await api('contacts.page', { q: $('cSearch').value, eligible: $('cEligible').checked ? 'TRUE' : '', page: contactPage, page_size: 50 });
     setConn(true);
@@ -312,6 +313,31 @@ async function loadContacts() {
 }
 $('cSearch').addEventListener('input', debounce(() => { contactPage = 1; loadContacts(); }, 400));
 $('cEligible').addEventListener('change', () => { contactPage = 1; loadContacts(); });
+
+/* Who can be e-mailed, why not, and a confirmed one-step fix for contacts with no lawful basis. */
+const REASON_TEXT = { NO_LAWFUL_BASIS: 'no lawful basis recorded', SUPPRESSED: 'unsubscribed or blocked', INVALID_EMAIL: 'invalid e-mail address', CONSENT_REFUSED: 'refused consent', STATUS_INACTIVE: 'set inactive' };
+async function loadEligibility() {
+  const e = await api('contacts.eligibility');
+  $('eligBox').classList.toggle('hidden', !e.total);
+  const why = Object.entries(e.reasons).map(([k, v]) => `${num(v)} ${REASON_TEXT[k] || k.replace(/_/g, ' ').toLowerCase()}`).join(', ');
+  const li = e.reasons.NO_LAWFUL_BASIS && !e.allow_legitimate_interest ? ' (B2B contacts approved under legitimate interest count here until ALLOW_LEGITIMATE_INTEREST is on)' : '';
+  $('eligText').innerHTML = `<b>${num(e.eligible)} of ${num(e.total)}</b> contacts can be e-mailed.` + (why ? ` Not e-mailable: ${esc(why)}${esc(li)}.` : '');
+  $('eligFix').classList.toggle('hidden', !e.reasons.NO_LAWFUL_BASIS);
+}
+$('eligConsentBtn').addEventListener('click', () => { $('eligConsent').classList.toggle('hidden'); $('eligLi').classList.add('hidden'); });
+$('eligLiBtn').addEventListener('click', () => { $('eligLi').classList.toggle('hidden'); $('eligConsent').classList.add('hidden'); });
+$('eligConsentGo').addEventListener('click', (e) => guard(async () => {
+  if (!$('eligConsentOk').checked) throw new Error('Tick the box to confirm they all gave this consent.');
+  const r = await post('contacts.fix_basis', { basis: 'CONSENT', consent_source: $('eligSource').value, confirm: 'true' });
+  toast(`Consent recorded for ${num(r.updated)} contacts. ${num(r.eligible)} can now be e-mailed.`);
+  await loadContacts();
+}, e.currentTarget));
+$('eligLiGo').addEventListener('click', (e) => guard(async () => {
+  if (!$('eligLiOk').checked) throw new Error('Tick the box to confirm these are business contacts.');
+  const r = await post('contacts.fix_basis', { basis: 'LEGITIMATE_INTEREST', confirm: 'true' });
+  toast(`Legitimate interest recorded for ${num(r.updated)} contacts. ${num(r.eligible)} can now be e-mailed.`);
+  await loadContacts();
+}, e.currentTarget));
 $('csvImport').addEventListener('click', (e) => guard(async () => {
   const f = $('csvFile').files[0];
   if (!f) throw new Error('Choose a CSV file.');
@@ -338,7 +364,7 @@ async function loadCampaigns() {
         : `<b>PRODUCTION</b> — ${d.send_enabled ? 'sending is ON' : 'sending is OFF (SEND_ENABLED)'}${d.production_approved ? '' : ' · production not approved (run oceApproveProduction)'} · ${num(d.sent_today)}/${num(d.daily_limit)} sent today${d.blocked_reason ? ' · paused now: ' + esc(d.blocked_reason) : ''}`;
     $('campaignRows').innerHTML = list.length ? list.map((c) => `<tr>
       <td><b>${esc(c.name)}</b><div class="small muted">${esc(c.subject)}</div>${c.problems.length ? `<div class="small warn-text">${c.problems.map(esc).join('<br>')}</div>` : ''}</td>
-      <td><span class="status s-${esc(String(c.status).toLowerCase())}">${esc(c.status)}</span></td>
+      <td><span class="status s-${esc(String(c.status).toLowerCase())}">${esc(c.status)}</span>${c.schedule && c.schedule.state === 'SCHEDULED' ? `<div class="small muted">⏰ starts ${esc(whenText(c.schedule.starts))}</div>` : ''}${c.schedule && c.schedule.ends && c.schedule.state !== 'ENDED' ? `<div class="small muted">stops ${esc(whenText(c.schedule.ends))}</div>` : ''}</td>
       <td>${esc((segments.find((s) => s.segment_id === c.segment_id) || {}).segment_name || (c.segment_id ? c.segment_id : 'All eligible'))}</td>
       <td>${num(c.queue.pending)}</td><td>${num(c.queue.sent + c.queue.simulated)}${c.queue.simulated ? ' <small class="muted">(sim)</small>' : ''}</td><td>${num(c.queue.failed)}</td>
       <td class="btns">${campaignButtons(c)}</td></tr>`).join('') : '<tr><td colspan="7" class="muted">No campaigns yet.</td></tr>';
@@ -358,6 +384,15 @@ function campaignAction(a, id, list, btn) {
   if (a === 'ACTIVE' && !confirm('Activate this campaign? Eligible contacts in the audience will be queued and processed automatically within the sending window.')) return;
   guard(async () => { await post('campaigns.status', { campaign_id: id, status: a }); toast('Campaign ' + a.toLowerCase()); await loadCampaigns(); }, btn);
 }
+/** ISO date -> value for <input type="datetime-local"> in this browser's time zone. */
+function toLocalInput(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || isNaN(d)) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+const fromLocalInput = (v) => (v ? new Date(v).toISOString() : '');
+function whenText(iso) { return iso ? new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''; }
 function openEditor(c) {
   $('campaignEditor').classList.remove('hidden');
   $('previewBox').classList.add('hidden');
@@ -365,6 +400,8 @@ function openEditor(c) {
   $('ceId').value = c ? c.campaign_id : '';
   [['ceName', 'name'], ['ceSubject', 'subject'], ['cePreheader', 'preheader'], ['ceBody', 'body_html'], ['ceFromName', 'from_name'], ['ceFromEmail', 'from_email'], ['ceReplyTo', 'reply_to'], ['ceDailyCap', 'daily_cap'], ['ceSegment', 'segment_id']]
     .forEach(([el, k]) => { $(el).value = c ? (c[k] ?? '') : ''; });
+  $('ceStart').value = c ? toLocalInput(c.start_at) : '';
+  $('ceEnd').value = c ? toLocalInput(c.end_at) : '';
   $('campaignEditor').scrollIntoView({ behavior: 'smooth' });
 }
 $('newCampaign').addEventListener('click', () => openEditor(null));
@@ -374,7 +411,8 @@ $('campaignForm').addEventListener('submit', (e) => {
   guard(async () => {
     const c = await post('campaigns.save', { campaign: {
       campaign_id: $('ceId').value || undefined, name: $('ceName').value, segment_id: $('ceSegment').value, subject: $('ceSubject').value, preheader: $('cePreheader').value,
-      body_html: $('ceBody').value, from_name: $('ceFromName').value, from_email: $('ceFromEmail').value, reply_to: $('ceReplyTo').value, daily_cap: $('ceDailyCap').value
+      body_html: $('ceBody').value, from_name: $('ceFromName').value, from_email: $('ceFromEmail').value, reply_to: $('ceReplyTo').value, daily_cap: $('ceDailyCap').value,
+      start_at: fromLocalInput($('ceStart').value), end_at: fromLocalInput($('ceEnd').value)
     } });
     $('ceId').value = c.campaign_id;
     toast(c.problems.length ? 'Saved. Before activating: ' + c.problems.join(' ') : 'Saved.', c.problems.length ? 'warn' : 'ok');
@@ -495,10 +533,10 @@ $('pdfRead').addEventListener('click', (e) => guard(async () => {
   $('pdfProgress').classList.remove('hidden');
   const r = await window.ocePdfImport.importPdf(f, { tags: $('pdfTags').value }, (p) => {
     $('pdfBar').style.width = (p.total ? Math.max(3, Math.round(p.done / p.total * 100)) : 3) + '%';
-    $('pdfMsg').textContent = p.message + (p.found ? ` · ${num(p.found)} contacts so far` : '');
+    $('pdfMsg').textContent = p.message + (p.found ? ` · ${num(p.found)} found so far` : '');
   });
   $('pdfBar').style.width = '100%';
-  $('pdfMsg').textContent = `Read ${num(r.pages)} pages: ${num(r.found)} contacts found, ${num(r.created)} new in Review.` + (r.failed.length ? ` ${r.failed.length} piece(s) failed (pages ${r.failed.map((x) => x.from + '–' + x.to).join(', ')}); try again later.` : '');
-  toast(`PDF read: ${num(r.found)} contacts. Check Review.`, r.failed.length ? 'warn' : 'ok');
+  $('pdfMsg').textContent = window.ocePdfImport.summary(r) + (r.failed.length ? ` ${r.failed.length} piece(s) failed (pages ${r.failed.map((x) => x.from + '–' + x.to).join(', ')}); try again later.` : '');
+  toast(r.found ? `PDF read: ${num(r.found)} found. Check Review.` : 'PDF read, but nothing to collect in it.', r.failed.length || !r.found ? 'warn' : 'ok');
   api('dashboard').then((d) => setConn(true, d)).catch(() => {});
 }, e.currentTarget));

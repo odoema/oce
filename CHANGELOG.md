@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.5.0 — 2026-11-25
+
+### Added
+- Campaign scheduling in the dashboard and the assistant: "Start sending on" / "Stop sending on" (the engine already honoured `start_at` / `end_at`). Scheduled campaigns show ⏰ and their start time; the assistant asks "When should it start?" (now / tomorrow 9:00 / next Monday 9:00 / a typed date).
+- Contacts: "Who can I e-mail?" shows eligible vs not, with reasons, and a confirmed one-step fix for contacts with no lawful basis: record consent (with its source) or legitimate interest (also switches ALLOW_LEGITIMATE_INTEREST on). New API actions `contacts.eligibility`, `contacts.fix_basis` (requires `confirm=true`).
+- The assistant detects "approved but nobody can be e-mailed" and walks through the basis questions before writing a campaign.
+
+### Fixed
+- An active campaign whose stop date had passed stayed ACTIVE forever, so automation never went idle. Expired campaigns now become COMPLETED.
+- Schedule validation: invalid dates, stop before start, or stop in the past block activation with a clear message.
+
+## 2.4.1 — 2026-11-24
+
+### Added
+- Registers without contact details. A real 12-page Uganda Law Society "List of approved law firms" gave 0 results because it lists only names, addresses and districts. Numbered registers are now recognised and each entry becomes an organisation lead: name (multi-line names and "– LEGAL DEPARTMENT" kept whole), address, district, plus any e-mail or phone it does carry. On the full list: 1,486 entries, 1,480 parsed cleanly. Repeated page titles and table headings are ignored.
+- Upload summary says what was found: contacts vs organisations with name and address only.
+
 ## 2.4.0 — 2026-11-24
 
 ### Added

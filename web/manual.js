@@ -11,10 +11,16 @@
  * See docs/manual.md for how to update it.
  */
 window.OCE_MANUAL = {
-  version: '2.4.0',
+  version: '2.5.0',
   updated: '2026-11-24',
 
   whatsNew: {
+    '2.5.0': [
+      'Schedule campaigns: set "Start sending on" and "Stop sending on", or tell the assistant "tomorrow 9:00" / "next Monday". Campaigns stop by themselves on their stop date.',
+      'Contacts now shows who can be e-mailed and why not, with a one-step fix you confirm: "They agreed to hear from me" or "They are business contacts".',
+      'The assistant spots contacts nobody can e-mail yet and helps you record the right reason before writing the campaign.'
+    ],
+    '2.4.1': ['PDF registers that list only names and addresses (like the Law Society\'s list of approved law firms) are now read too: each organisation is saved with its address and district, clearly marked as having no e-mail yet.'],
     '2.4.0': [
       'Read a PDF list of any size: on Missions (or ask the assistant), choose a PDF and OCE reads every page, even scanned ones. Your computer splits big files into small pieces and OCE reads them one after another, with a progress bar.',
       'PDFs found on websites can now be up to 50 MB.'
@@ -155,24 +161,26 @@ window.OCE_MANUAL = {
     {
       id: 'contacts', icon: '📇', title: 'Your contact list', tagline: 'Everyone you may reach, in one place.',
       covers: ['contacts'], open: 'contacts',
-      ui: ['Import contacts (CSV)', 'Import', 'Eligible'],
+      ui: ['Import contacts (CSV)', 'Import', 'Eligible', 'Who can I e-mail?', 'They agreed to hear from me', 'Record consent', 'Record legitimate interest'],
       steps: [
         { title: 'Check who is eligible', text: 'Eligible = yes means OCE may email them now. No always comes with a reason.', mock: { screen: 'contacts' } },
         { title: 'Bring your own list', text: 'Save a sheet as CSV with a header row (email, name, company, consent…), then Import.', mock: { screen: 'contacts', click: 'Import' } }
       ],
-      tips: ['Only rows with consent = yes can be emailed. Others are kept but never mailed.', 'Add a tag such as expo-2026 to target that group later.', 'Unsubscribes are automatic and permanent.']
+      tips: ['Approved but "Eligible: no"? The "Who can I e-mail?" box at the top of Contacts says why and lets you record consent or legitimate interest for all of them at once, after you confirm it is true.',
+        'Only rows with consent = yes can be emailed. Others are kept but never mailed.', 'Add a tag such as expo-2026 to target that group later.', 'Unsubscribes are automatic and permanent.']
     },
     {
       id: 'campaigns', icon: '✍️', title: 'Write and send a campaign', tagline: 'Practice mode is on until you choose to go live.',
       covers: ['campaigns'], open: 'campaigns',
-      ui: ['New campaign', 'Subject', 'Preview', 'Send test to me', 'Activate', 'Run now', 'Daily cap', 'Audience segment'],
+      ui: ['New campaign', 'Subject', 'Preview', 'Send test to me', 'Activate', 'Run now', 'Daily cap', 'Audience segment', 'Start sending on (optional)', 'Stop sending on (optional)'],
       steps: [
         { title: 'Start a campaign', text: 'Pick your audience, write a subject and a short body.', mock: { screen: 'campaigns', click: 'New campaign' } },
         { title: 'Personalise', text: 'Write {{first_name|there}} and each person sees their own name (or "there").', mock: { screen: 'campaigns', type: { into: 'Subject', text: 'Hello {{first_name|there}}' } } },
         { title: 'Look before you leap', text: 'Preview shows the real email. Send test to me puts one in your inbox.', mock: { screen: 'campaigns', click: 'Send test to me' } },
         { title: 'Activate', text: 'OCE sends in small batches on weekdays, 09:00–17:00 Kampala time, skipping public holidays.', mock: { screen: 'campaigns', click: 'Activate' } }
       ],
-      tips: ['In practice mode (DRY_RUN) sent emails show "(sim)": nothing leaves Google.', 'Your postal address and an unsubscribe link are added to every email automatically.']
+      tips: ['Schedule it: fill "Start sending on" (and optionally "Stop sending on") before you click Activate. The campaign shows ⏰ with its start time and waits until then.',
+        'In practice mode (DRY_RUN) sent emails show "(sim)": nothing leaves Google.', 'Your postal address and an unsubscribe link are added to every email automatically.']
     },
     {
       id: 'golive', icon: '🚀', title: 'Go live (free email sending)', tagline: 'Resend\'s free plan: 3,000 emails a month, 100 a day.',
@@ -196,7 +204,7 @@ window.OCE_MANUAL = {
 
   /* Every key of OCE_DEFAULT_SETTINGS, with its default and a plain explanation. */
   settings: [
-    { key: 'VERSION', def: '2.4.0', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
+    { key: 'VERSION', def: '2.5.0', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
     { key: 'TIMEZONE', def: 'Africa/Kampala', plain: 'Clock used for sending hours and dates.', group: 'System' },
     { key: 'DEFAULT_COUNTRY_CODE', def: '256', plain: 'Turns 0772… into +256772….', group: 'System' },
     { key: 'CRAWL_ENABLED', def: 'TRUE', plain: 'Master switch for finding and collecting.', group: 'Finding' },
@@ -234,6 +242,7 @@ window.OCE_MANUAL = {
     { q: 'Will OCE email anyone without my approval?', fix: 'No. Found contacts wait in Review until you approve them with a basis, and nothing sends until you activate a campaign. Practice mode (DRY_RUN) stays on until you go live.' },
     { q: 'Does OCE cost anything?', fix: 'No. It runs on your Google account; finding websites uses free Wikipedia and Wikidata; Resend sends up to 100 emails a day free.' },
     { q: 'Can OCE read PDF files?', fix: 'Yes. On Missions use "Read a PDF list" (or ask the assistant) for a file on your computer: any length up to 200 MB, every page read, scanned ones too. PDF links on websites are read automatically (up to 50 MB). Each entry becomes its own contact in Review.' },
+    { q: 'I read a PDF and it found 0 contacts', fix: 'Check whether the PDF actually contains e-mails or phone numbers. Registers such as approved-firm lists often give only names and addresses; OCE now saves those as organisation leads (name, address, district), but they cannot be e-mailed until you have a contact for them.' },
     { q: 'My PDF is bigger than 2 MB or longer than 10 pages', fix: 'No problem. "Read a PDF list" splits it on your computer into pieces Google can read (10 pages, under 2 MB) and reads them one after another until the whole file is done.' },
     { q: 'Where is my data kept?', fix: 'In a Google Sheet in your own Drive, "OCE — Campaign Engine Data". Overview links to it.' },
     { q: 'Dashboard says "Not connected" on a new browser or phone', fix: 'Each browser connects once. On a connected browser open Settings → Connect another browser or phone → Copy link, and open that link on the new one. Or paste the API key in Settings.' },
@@ -241,6 +250,8 @@ window.OCE_MANUAL = {
     { q: 'A mission sits at 0%', fix: 'Background work runs every 5 minutes. Wait, or click Collect now.' },
     { q: 'Many pages "blocked" or "skipped"', fix: 'Normal. Those websites ask not to be crawled, and OCE respects that.' },
     { q: 'Review is empty after a mission', fix: 'Those pages published no emails or phones. Try a directory website, or lower Min. confidence.' },
+    { q: 'I approved my contacts but none can be e-mailed', fix: 'Approving adds them to Contacts; OCE also needs a lawful basis it may e-mail on. Open Contacts: the "Who can I e-mail?" box shows why and lets you record consent (with where it came from) or legitimate interest for business contacts, after you confirm it is true.' },
+    { q: 'Can I schedule a campaign?', fix: 'Yes. In the campaign form set "Start sending on" and, if you like, "Stop sending on", then Activate. Or ask the assistant. Sending still only happens on weekdays inside your sending hours.' },
     { q: 'A contact shows Eligible: no', fix: 'It has no basis yet, unsubscribed, or has a bad email. Approve it with a basis, or leave it.' },
     { q: 'Campaign says "Not sent: Outside sending window"', fix: 'Before 09:00, after 17:00, a weekend or a holiday. It sends in the next window by itself.' },
     { q: '"SEND_ENABLED is FALSE" or "RESEND_API_KEY missing"', fix: 'Go-live setup isn\'t finished. Follow the Go live checklist.' },

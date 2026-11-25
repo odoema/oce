@@ -74,7 +74,7 @@
     try { split = await splitPdf(PDFLib, new Uint8Array(await file.arrayBuffer())); } catch (e) {
       throw new Error('This PDF could not be opened (' + (e.message || e) + '). If it is password-protected, remove the password and try again.');
     }
-    const res = { pages: split.total, pieces: split.pieces.length, found: 0, created: 0, failed: [] };
+    const res = { pages: split.total, pieces: split.pieces.length, found: 0, created: 0, withContact: 0, orgOnly: 0, failed: [] };
     for (let i = 0; i < split.pieces.length; i++) {
       const p = split.pieces[i];
       report({ phase: 'read', done: i, total: split.pieces.length, found: res.found, message: `Reading pages ${p.from}–${p.to} of ${split.total}…` });
@@ -84,6 +84,8 @@
           const r = await post('documents.import', { name: file.name, from: p.from, to: p.to, pages: split.total, data: toBase64(p.bytes), tags: opts.tags || '' });
           res.found += r.found || 0;
           res.created += r.created || 0;
+          res.withContact += r.with_contact === undefined ? (r.found || 0) : r.with_contact;
+          res.orgOnly += r.organisations_only || 0;
           break;
         } catch (e) {
           if (++attempt >= 3) { res.failed.push({ from: p.from, to: p.to, error: e.message }); break; }
@@ -95,7 +97,17 @@
     return res;
   }
 
-  const api = { splitPdf, importPdf, toBase64, LIMITS };
+  /** One plain sentence describing an import result, for the dashboard and the assistant. */
+  function summary(r) {
+    const n = (v) => Number(v || 0).toLocaleString();
+    if (!r.found) return `Read ${n(r.pages)} pages, but found no organisations or contact details in this PDF.`;
+    let s = `Read ${n(r.pages)} pages: ${n(r.found)} ${r.orgOnly ? 'organisations' : 'contacts'} found, ${n(r.created)} new in Review.`;
+    if (r.orgOnly && !r.withContact) s += ' This PDF lists names and addresses only (no e-mails or phones), so they are saved as leads you cannot e-mail yet.';
+    else if (r.orgOnly) s += ` ${n(r.withContact)} have an e-mail or phone; ${n(r.orgOnly)} have a name and address only.`;
+    return s;
+  }
+
+  const api = { splitPdf, importPdf, toBase64, summary, LIMITS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ocePdfImport = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -323,3 +323,36 @@ function oceUpdateContacts_(ids, patch) {
   oceFlushAll_();
   return { updated: n };
 }
+
+/** How many contacts can be e-mailed, and why the others cannot. */
+function oceEligibilitySummary_() {
+  var out = { total: 0, eligible: 0, reasons: {}, allow_legitimate_interest: oceSettingBool_('ALLOW_LEGITIMATE_INTEREST', false) };
+  oceTable_('CONTACTS').all().forEach(function (c) {
+    out.total++;
+    var el = oceContactEligibility_(c);
+    if (el.ok) out.eligible++; else out.reasons[el.reason] = (out.reasons[el.reason] || 0) + 1;
+  });
+  return out;
+}
+
+/**
+ * Records a lawful basis for every contact that currently has none (reason NO_LAWFUL_BASIS).
+ * The person using the dashboard must confirm it is true; nothing here guesses.
+ *  - basis CONSENT: requires consent_source (where the yes came from).
+ *  - basis LEGITIMATE_INTEREST: also switches ALLOW_LEGITIMATE_INTEREST on, which B2B contacts need.
+ */
+function oceFixLawfulBasis_(p) {
+  var basis = String(p.basis || '').toUpperCase();
+  if (['CONSENT', 'LEGITIMATE_INTEREST'].indexOf(basis) < 0) throw new Error('basis must be CONSENT or LEGITIMATE_INTEREST');
+  if (String(p.confirm) !== 'true') throw new Error('Please confirm that this is true for these contacts.');
+  if (basis === 'CONSENT' && !oceStr_(p.consent_source)) throw new Error('Say where the consent came from (consent_source).');
+  var ids = oceTable_('CONTACTS').filter(function (c) { return oceContactEligibility_(c).reason === 'NO_LAWFUL_BASIS'; }).map(function (c) { return c.contact_id; });
+  var patch = basis === 'CONSENT' ? { lawful_basis: 'CONSENT', consent_status: 'YES', consent_source: p.consent_source } : { lawful_basis: 'LEGITIMATE_INTEREST' };
+  var r = ids.length ? oceUpdateContacts_(ids, patch) : { updated: 0 };
+  if (basis === 'LEGITIMATE_INTEREST') oceApplySettings_({ ALLOW_LEGITIMATE_INTEREST: 'TRUE' });
+  oceLog_('INFO', 'contacts', 'Lawful basis ' + basis + ' recorded for ' + ids.length + ' contact(s)', { source: p.consent_source || '' });
+  oceFlushAll_();
+  var summary = oceEligibilitySummary_();
+  summary.updated = ids.length;
+  return summary;
+}

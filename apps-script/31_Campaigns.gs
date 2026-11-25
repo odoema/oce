@@ -110,6 +110,10 @@ function oceCampaignProblems_(c) {
   if (!oceIsValidEmail_(from)) problems.push('No verified sender address (campaign from_email or DEFAULT_FROM_EMAIL).');
   if (!oceSetting_('SENDER_POSTAL_ADDRESS')) problems.push('SENDER_POSTAL_ADDRESS is required for marketing e-mail footers.');
   if (!oceUnsubscribeBaseUrl_()) problems.push('Web app URL unknown: deploy the web app or set PUBLIC_WEB_APP_URL so unsubscribe links work.');
+  var s = oceToDate_(c.start_at), e = oceToDate_(c.end_at);
+  if ((c.start_at && !s) || (c.end_at && !e)) problems.push('The start or stop date is not a valid date.');
+  if (s && e && e <= s) problems.push('The stop date must be after the start date.');
+  if (e && e <= new Date()) problems.push('The stop date is already in the past.');
   return problems;
 }
 
@@ -150,7 +154,32 @@ function oceSetCampaignStatus_(campaignId, status) {
 }
 
 function oceHasActiveCampaign_() {
+  oceExpireCampaigns_();
   return !!oceTable_('CAMPAIGNS').find(function (c) { return String(c.status).toUpperCase() === 'ACTIVE'; });
+}
+
+/** Active campaigns whose stop date has passed become COMPLETED, so automation can go idle. */
+function oceExpireCampaigns_() {
+  var campaigns = oceTable_('CAMPAIGNS');
+  var now = new Date();
+  var n = 0;
+  campaigns.all().forEach(function (c) {
+    var e = oceToDate_(c.end_at);
+    if (String(c.status).toUpperCase() === 'ACTIVE' && e && e <= now) {
+      campaigns.update(c, { status: 'COMPLETED', updated_at: now, notes: oceClean_((c.notes ? c.notes + ' | ' : '') + 'Completed: stop date reached', 500) });
+      n++;
+    }
+  });
+  if (n) { oceFlushAll_(); oceLog_('INFO', 'campaigns', n + ' campaign(s) completed: stop date reached'); }
+  return n;
+}
+
+/** When a campaign is (or will be) sending, in plain words, from its start/stop dates. */
+function oceCampaignSchedule_(c) {
+  var now = new Date(), s = oceToDate_(c.start_at), e = oceToDate_(c.end_at);
+  if (s && s > now) return { state: 'SCHEDULED', starts: s.toISOString(), ends: e ? e.toISOString() : '' };
+  if (e && e <= now) return { state: 'ENDED', starts: s ? s.toISOString() : '', ends: e.toISOString() };
+  return { state: 'OPEN', starts: s ? s.toISOString() : '', ends: e ? e.toISOString() : '' };
 }
 
 function oceCampaignView_(c) {
@@ -162,7 +191,7 @@ function oceCampaignView_(c) {
   });
   return { campaign_id: c.campaign_id, name: c.name, status: c.status, segment_id: c.segment_id, subject: c.subject, preheader: c.preheader,
     body_html: c.body_html, body_text: c.body_text, from_name: c.from_name, from_email: c.from_email, reply_to: c.reply_to,
-    start_at: c.start_at, end_at: c.end_at, daily_cap: c.daily_cap, created_at: c.created_at, updated_at: c.updated_at,
+    start_at: oceToDate_(c.start_at) ? oceToDate_(c.start_at).toISOString() : '', end_at: oceToDate_(c.end_at) ? oceToDate_(c.end_at).toISOString() : '', schedule: oceCampaignSchedule_(c), daily_cap: c.daily_cap, created_at: c.created_at, updated_at: c.updated_at,
     last_run_at: c.last_run_at, queue: stats, problems: oceCampaignProblems_(c) };
 }
 

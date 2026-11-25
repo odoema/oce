@@ -159,7 +159,9 @@ function oceScanUrl_(url) {
 
 /** Candidates from a PDF: per-entry context for lists, page-level rules as a fallback. */
 function oceDocumentCandidates_(outcome, page, missionId) {
-  var list = oceBuildListCandidates_(outcome.text, outcome.final_url || outcome.url, { mission_id: missionId, doc_name: outcome.doc_name });
+  var ctx = { mission_id: missionId, doc_name: outcome.doc_name };
+  if (oceLooksLikeRegister_(outcome.text)) return oceBuildRegisterCandidates_(outcome.text, outcome.final_url || outcome.url, ctx);
+  var list = oceBuildListCandidates_(outcome.text, outcome.final_url || outcome.url, ctx);
   if (list.length) return list;
   // No e-mails: keep a single organisation contact only when the document is clearly about one organisation.
   var single = oceBuildCandidates_(page, { mission_id: missionId }).filter(function (c) { return c.organization && c.address; });
