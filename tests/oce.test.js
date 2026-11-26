@@ -836,3 +836,22 @@ test('eligibility: approved contacts without a basis are explained and fixed onl
   assert.equal(r.eligible, 2);
   assert.equal(rt.ctx.oceSettingBool_('ALLOW_LEGITIMATE_INTEREST', false), true);
 });
+
+test('tag segment rules match whole tags, and CSV re-import merges tags', () => {
+  const rt = setupRuntime();
+  rt.ctx.oceImportCsv_('email,consent,category,tags\nh@a.ug,yes,clinic,"Health, expo-2026"\nhc@b.ug,yes,clinic,healthcare\nn@c.ug,yes,law-firm,\n', { tags: 'batch1' });
+  rt.fresh();
+  const tags = (e) => rt.sheet('CONTACTS').objects().find((c) => c.email === e).tags;
+  assert.equal(tags('h@a.ug'), 'Health, expo-2026, batch1');
+  assert.equal(tags('n@c.ug'), 'batch1');
+  const m = (rules) => rt.sheet('CONTACTS').objects().filter((c) => rt.ctx.oceMatchesSegment_(c, rules)).map((c) => c.email).sort();
+  assert.deepEqual(m([{ field: 'tags', operator: 'contains', value: 'health' }]), ['h@a.ug']);
+  assert.deepEqual(m([{ field: 'tags', operator: 'equals', value: 'EXPO-2026' }]), ['h@a.ug']);
+  assert.deepEqual(m([{ field: 'tags', operator: 'not_contains', value: 'health' }]), ['hc@b.ug', 'n@c.ug']);
+  assert.deepEqual(m([{ field: 'tags', operator: 'in', value: 'healthcare; expo-2026' }]), ['h@a.ug', 'hc@b.ug']);
+  assert.deepEqual(m([{ field: 'tags', operator: 'starts_with', value: 'expo' }]), ['h@a.ug']);
+  assert.deepEqual(m([{ field: 'category', operator: 'equals', value: 'clinic' }, { field: 'tags', operator: 'contains', value: 'healthcare' }]), ['hc@b.ug']);
+  rt.ctx.oceImportCsv_('email,tags\nh@a.ug,vip; health\n', {});
+  rt.fresh();
+  assert.equal(tags('h@a.ug'), 'Health, expo-2026, batch1, vip');
+});
