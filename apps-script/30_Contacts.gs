@@ -150,7 +150,7 @@ function oceUpsertContactFromCandidate_(c, basis, consent, opts) {
     var patch = { updated_at: now, lawful_basis: basis, consent_status: consent };
     Object.keys(fields).forEach(function (k) { if (!oceStr_(existing[k]) && oceStr_(fields[k])) patch[k] = fields[k]; });
     if (consent === 'YES') { patch.consent_date = now; patch.consent_source = oceClean_(opts.consent_source, 200); }
-    if (opts.tags) patch.tags = oceUnique_(oceStr_(existing.tags).split(/[,;]\s*/).concat(String(opts.tags).split(/[,;]\s*/))).join(', ');
+    if (opts.tags) patch.tags = oceMergeTags_(existing.tags, opts.tags);
     contacts.update(existing, patch);
     return { contact: existing, created: false };
   }
@@ -211,7 +211,7 @@ function oceImportCsv_(csvText, opts) {
       first_name: pick(o, ['first_name', 'firstname', 'given_name', 'first']), last_name: pick(o, ['last_name', 'lastname', 'surname', 'family_name', 'last']),
       phone: ocePhoneNormalize_(pick(o, ['phone', 'mobile', 'telephone', 'tel', 'phone_number'])), organization: pick(o, ['organization', 'organisation', 'company', 'employer', 'business']),
       role: pick(o, ['role', 'job_title', 'title', 'position', 'profession']), country: pick(o, ['country']), location: pick(o, ['location', 'city', 'town', 'district']),
-      category: pick(o, ['category', 'industry', 'sector']), tags: pick(o, ['tags', 'tag', 'segment']) || opts.tags || '', notes: pick(o, ['notes', 'note'])
+      category: pick(o, ['category', 'industry', 'sector']), tags: oceMergeTags_(pick(o, ['tags', 'tag', 'segment']), opts.tags), notes: pick(o, ['notes', 'note'])
     };
     if (!fields.first_name && pick(o, ['name', 'full_name', 'contact_name'])) { var n = oceSplitName_(pick(o, ['name', 'full_name', 'contact_name'])); fields.first_name = n.first; fields.last_name = n.last; }
     var existing = contacts.get('email', email);
@@ -219,6 +219,8 @@ function oceImportCsv_(csvText, opts) {
     if (existing) {
       var patch = { updated_at: now };
       Object.keys(fields).forEach(function (k) { if (oceStr_(fields[k])) patch[k] = fields[k]; });
+      // Tags accumulate: a re-import adds tags, it never wipes the ones already there.
+      if (oceStr_(fields.tags)) patch.tags = oceMergeTags_(existing.tags, fields.tags);
       // Never upgrade consent silently: only overwrite when the import states it explicitly.
       if (consent !== 'UNKNOWN') Object.keys(consentFields).forEach(function (k) { patch[k] = consentFields[k]; });
       contacts.update(existing, patch);

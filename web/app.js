@@ -304,7 +304,7 @@ async function loadContacts() {
     setConn(true);
     $('cTotals').textContent = `${num(d.total)} shown · ${num(d.eligible_total)} eligible overall`;
     $('contactRows').innerHTML = d.items.length ? d.items.map((c) => `<tr>
-      <td>${esc(c.email)}</td><td>${esc([c.first_name, c.last_name].filter(Boolean).join(' ') || '—')}</td><td>${esc(c.organization || '—')}</td>
+      <td>${esc(c.email)}</td><td>${esc([c.first_name, c.last_name].filter(Boolean).join(' ') || '—')}</td><td>${esc(c.organization || '—')}${c.category || c.tags ? `<div class="small muted">${esc([c.category, c.tags].filter(Boolean).join(' · '))}</div>` : ''}</td>
       <td>${esc(c.lawful_basis || '—')}</td><td>${esc(c.consent_status || '—')}</td><td><span class="status s-${esc(String(c.status).toLowerCase())}">${esc(c.status)}</span></td>
       <td>${c.eligible ? '<span class="yes">Yes</span>' : `<span class="no" title="${esc(c.eligibility_reason)}">No · ${esc(c.eligibility_reason.replace(/_/g, ' ').toLowerCase())}</span>`}</td>
       <td>${num(c.send_count)}</td></tr>`).join('') : '<tr><td colspan="8" class="muted">No contacts yet. Approve candidates in Review or import a CSV.</td></tr>';

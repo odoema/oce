@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.5.1 — 2026-11-26
+
+### Fixed
+- Segment rules on `tags` matched raw text, so `tags contains health` also matched `healthcare` and `equals` failed on contacts with more than one tag. Tags are now split on `,` `;` `|` and matched as whole tags (case-insensitive): `equals`/`contains` = has the tag, `not_*` = lacks it, `in` = has any listed tag, `starts_with`/`ends_with` = some tag does. New helpers `oceTagList_`, `oceMergeTags_`, `oceMatchesTagRule_`.
+- CSV re-import replaced an existing contact's tags with the row's tags, and "Tag all rows" was ignored on rows that had their own `tags`. Row tags, the batch tag and existing tags are now merged without duplicates. Review approval uses the same merge (now case-insensitive).
+
+### Changed
+- CSV import help lists the `category` column (and its `industry` / `sector` aliases), which the importer already accepted.
+- Contacts table shows category and tags under the organisation.
+
 ## 2.5.0 — 2026-11-25
 
 ### Added

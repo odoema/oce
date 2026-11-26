@@ -11,10 +11,15 @@
  * See docs/manual.md for how to update it.
  */
 window.OCE_MANUAL = {
-  version: '2.5.0',
-  updated: '2026-11-24',
+  version: '2.5.1',
+  updated: '2026-11-26',
 
   whatsNew: {
+    '2.5.1': [
+      'Tags now match as whole tags: a segment rule "tags contains health" picks contacts tagged health, not healthcare.',
+      'Importing a list again adds its tags to each contact instead of replacing the tags they already had. "Tag all rows" now applies to every row.',
+      'CSV import also reads a category column (or industry / sector), and Contacts shows each contact\'s category and tags under the organisation.'
+    ],
     '2.5.0': [
       'Schedule campaigns: set "Start sending on" and "Stop sending on", or tell the assistant "tomorrow 9:00" / "next Monday". Campaigns stop by themselves on their stop date.',
       'Contacts now shows who can be e-mailed and why not, with a one-step fix you confirm: "They agreed to hear from me" or "They are business contacts".',
@@ -167,7 +172,7 @@ window.OCE_MANUAL = {
         { title: 'Bring your own list', text: 'Save a sheet as CSV with a header row (email, name, company, consent…), then Import.', mock: { screen: 'contacts', click: 'Import' } }
       ],
       tips: ['Approved but "Eligible: no"? The "Who can I e-mail?" box at the top of Contacts says why and lets you record consent or legitimate interest for all of them at once, after you confirm it is true.',
-        'Only rows with consent = yes can be emailed. Others are kept but never mailed.', 'Add a tag such as expo-2026 to target that group later.', 'Unsubscribes are automatic and permanent.']
+        'Only rows with consent = yes can be emailed. Others are kept but never mailed.', 'Add a tag such as expo-2026 to target that group later. Put a category column (e.g. law-firm, school) in your CSV to group contacts by type.', 'Unsubscribes are automatic and permanent.']
     },
     {
       id: 'campaigns', icon: '✍️', title: 'Write and send a campaign', tagline: 'Practice mode is on until you choose to go live.',
@@ -180,7 +185,8 @@ window.OCE_MANUAL = {
         { title: 'Activate', text: 'OCE sends in small batches on weekdays, 09:00–17:00 Kampala time, skipping public holidays.', mock: { screen: 'campaigns', click: 'Activate' } }
       ],
       tips: ['Schedule it: fill "Start sending on" (and optionally "Stop sending on") before you click Activate. The campaign shows ⏰ with its start time and waits until then.',
-        'In practice mode (DRY_RUN) sent emails show "(sim)": nothing leaves Google.', 'Your postal address and an unsubscribe link are added to every email automatically.']
+        'In practice mode (DRY_RUN) sent emails show "(sim)": nothing leaves Google.', 'Your postal address and an unsubscribe link are added to every email automatically.',
+        'Target a group: under "Create an audience segment" add a rule such as category equals law-firm, or tags contains expo-2026. Tags match whole tags, so health does not pick up healthcare. Use "in" for several (expo-2026, vip). Rules in one segment must all be true.']
     },
     {
       id: 'golive', icon: '🚀', title: 'Go live (free email sending)', tagline: 'Resend\'s free plan: 3,000 emails a month, 100 a day.',
@@ -204,7 +210,7 @@ window.OCE_MANUAL = {
 
   /* Every key of OCE_DEFAULT_SETTINGS, with its default and a plain explanation. */
   settings: [
-    { key: 'VERSION', def: '2.5.0', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
+    { key: 'VERSION', def: '2.5.1', plain: 'Installed version. Set by OCE; do not edit.', group: 'System' },
     { key: 'TIMEZONE', def: 'Africa/Kampala', plain: 'Clock used for sending hours and dates.', group: 'System' },
     { key: 'DEFAULT_COUNTRY_CODE', def: '256', plain: 'Turns 0772… into +256772….', group: 'System' },
     { key: 'CRAWL_ENABLED', def: 'TRUE', plain: 'Master switch for finding and collecting.', group: 'Finding' },

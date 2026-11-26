@@ -19,10 +19,48 @@ function oceSegmentRules_(segmentId) {
   return rules;
 }
 
+/** Splits a tags cell ("expo-2026, Health; vip") into lower-case whole tags. */
+function oceTagList_(value) {
+  return String(value === undefined || value === null ? '' : value).toLowerCase().split(/\s*[,;|]\s*/)
+    .map(function (t) { return t.trim(); }).filter(Boolean);
+}
+
+/** Merges tag strings, keeping first-seen spelling and dropping case-insensitive duplicates. */
+function oceMergeTags_() {
+  var seen = {}, out = [];
+  Array.prototype.slice.call(arguments).forEach(function (s) {
+    String(s === undefined || s === null ? '' : s).split(/\s*[,;|]\s*/).forEach(function (t) {
+      t = t.trim(); var k = t.toLowerCase();
+      if (t && !seen[k]) { seen[k] = true; out.push(t); }
+    });
+  });
+  return out.join(', ');
+}
+
+/**
+ * Tags are matched as whole tags, not as text: "contains health" matches the tag "health"
+ * but not "healthcare". equals/contains = has that tag; not_* = lacks it; in = has any of them;
+ * starts_with/ends_with = some tag starts/ends with the value.
+ */
+function oceMatchesTagRule_(tags, op, v) {
+  var has = function (t) { return tags.indexOf(t) >= 0; };
+  switch (op) {
+    case 'equals': case 'contains': return has(v);
+    case 'not_equals': case 'not_contains': return !has(v);
+    case 'in': return oceTagList_(v).some(has);
+    case 'starts_with': return tags.some(function (t) { return t.indexOf(v) === 0; });
+    case 'ends_with': return tags.some(function (t) { return v.length <= t.length && t.slice(-v.length) === v; });
+    case 'is_empty': return !tags.length;
+    case 'not_empty': return tags.length > 0;
+    default: return false;
+  }
+}
+
 function oceMatchesSegment_(contact, rules) {
   return rules.every(function (rule) {
-    var actual = String(contact[rule.field] === undefined || contact[rule.field] === null ? '' : contact[rule.field]).toLowerCase().trim();
     var v = String(rule.value).toLowerCase().trim();
+    if (rule.field === 'tags') return oceMatchesTagRule_(oceTagList_(contact.tags), rule.operator, v);
+    var actual = String(contact[rule.field] === undefined || contact[rule.field] === null ? '' : contact[rule.field]).toLowerCase().trim();
     switch (rule.operator) {
       case 'equals': return actual === v;
       case 'not_equals': return actual !== v;
